@@ -68,7 +68,6 @@ La cadena documental que se modela es **pedido → albarán → factura**, por l
 
 Incluye el registro de pedidos, albaranes y facturas con validación de sus referencias, el registro encadenado y su verificación, la consulta de la cadena documental y el envío simulado a la AEAT con reintentos. El producto se expone únicamente mediante la **API REST**. Los casos de uso marcados como *Extra* en la tabla anterior forman parte del backlog y se abordan si el tiempo lo permite.
 
-
 Quedan **fuera** del MVP:
 
 - La firma electrónica real y la integración con los servicios reales de la AEAT.
