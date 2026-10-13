@@ -126,7 +126,38 @@ La arquitectura de referencia del NIST (SP 500-292) identifica cinco actores: co
 
 ## Arquitectura
 
-*Pendiente.*
+### Diagrama de referencia
+
+![Diagrama de arquitectura de referencia de verifactu-trace](docs/architecture.drawio.svg)
+
+### Componentes
+
+| Componente | Responsabilidad | Persistencia | Casos de uso |
+|---|---|---|---|
+| `api-gateway` | Punto de entrada único. Enruta las peticiones al servicio correspondiente. | — | Todos |
+| `document-service` | Gestiona pedidos, albaranes y facturas, valida sus referencias y la numeración por serie. | PostgreSQL (esquema `documents`) | CU-1 a CU-8 |
+| `traceability-service` | Registra los eventos de cada documento con su hash encadenado, verifica la integridad y reconstruye la cadena documental. | PostgreSQL (esquema `traceability`) | CU-9 a CU-12 |
+| `submission-service` | Envía las facturas a la AEAT (simulada), controla el estado y reintenta los fallos. | PostgreSQL (esquema `submissions`) | CU-13 a CU-16 |
+| PostgreSQL | Base de datos relacional. Una única instancia con un esquema por servicio (`documents`, `traceability` y `submissions`). | — | — |
+| Redis | Cola de eventos entre servicios. Desacopla la emisión del registro y del envío. | Streams en memoria | — |
+| AEAT simulada | Sustituye al servicio real de la AEAT con respuestas aceptadas, rechazadas o con error transitorio. | — | CU-13 |
+
+### Flujo de emisión de una factura
+
+1. El cliente envía la factura al `document-service` a través del gateway.
+2. El `document-service` valida que el albarán referenciado existe, calcula la numeración y los impuestos, y guarda la factura.
+3. Publica el evento `invoice.issued` en la cola de Redis y responde al cliente sin esperar al resto.
+4. El `traceability-service` consume el evento, calcula el hash encadenado con el registro anterior y lo guarda.
+5. El `submission-service` consume el evento, intenta el envío a la AEAT simulada y, si falla, lo reintenta con espera creciente.
+6. El cliente consulta la cadena documental en el `traceability-service` o el estado del envío en el `submission-service`.
+
+### Decisiones de diseño
+
+- **Una base de datos lógica por servicio**: cada servicio es el único propietario de su esquema en PostgreSQL y ningún otro accede a él directamente. Se despliega una única instancia para reducir el coste, pero la separación por esquema permite repartirlas en instancias independientes si el escalado lo exige.
+- **Comunicación asíncrona mediante eventos**: la emisión no depende de la disponibilidad de la trazabilidad ni del envío. Si la AEAT cae, las facturas se siguen emitiendo y los envíos se reintentan después.
+- **Orden de los eventos**: se usan *streams* de Redis, que conservan el orden, algo necesario para encadenar los hashes de cada documento.
+- **Servicios sin estado**: ningún servicio guarda estado en memoria, de modo que se pueden replicar tras un balanceador para dar elasticidad en los picos de cierre de mes.
+- **Contenedores**: cada componente se empaqueta en su propia imagen Docker, lo que permite desplegarlo en el proveedor cloud que se elija en hitos posteriores.
 
 ## Especificación de la API REST
 
