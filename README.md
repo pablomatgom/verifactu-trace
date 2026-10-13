@@ -161,7 +161,139 @@ La arquitectura de referencia del NIST (SP 500-292) identifica cinco actores: co
 
 ## Especificación de la API REST
 
-*Pendiente.*
+Esta sección define el contrato de la API que expone `verifactu-trace` a través del gateway. Cada servicio generará además su documentación OpenAPI con FastAPI (`/docs`), que se mantendrá alineada con este contrato.
+
+### Convenciones
+
+- **Prefijo y versión**: todas las rutas cuelgan de `/api/v1`. El gateway enruta por el recurso: `/api/v1/documents`, `/api/v1/orders`, `/api/v1/delivery-notes` y `/api/v1/invoices` al `document-service`, `/api/v1/traceability` al `traceability-service` y `/api/v1/submissions` al `submission-service`.
+- **Formato**: JSON en UTF-8, fechas en ISO 8601 e importes como números con dos decimales.
+- **Identificadores**: UUID asignado por el servidor.
+- **Paginación**: los listados admiten `page` y `size` y devuelven `items`, `page`, `size` y `total`.
+
+  ```
+  GET /api/v1/documents?type=INVOICE&page=2&size=20
+  ```
+
+  ```json
+  {
+    "items": [ { "id": "5d2e8a6c-...", "type": "INVOICE", "number": "A-2026-000021" } ],
+    "page": 2,
+    "size": 20,
+    "total": 134
+  }
+  ```
+
+- **Códigos de estado**: `200` consulta, `201` creación, `202` operación aceptada de forma asíncrona, `404` recurso inexistente, `409` conflicto con el estado actual, `422` datos o referencias inválidas.
+- **Comprobación de salud**: cada servicio expone `GET /health`, que utilizará la orquestación en hitos posteriores.
+- **Errores**: un cuerpo común con el código HTTP correspondiente.
+
+  ```json
+  { "error": { "code": "REFERENCE_NOT_FOUND", "message": "El pedido 3f1c... no existe" } }
+  ```
+
+### document-service
+
+| Método | Ruta | Descripción | CU | Respuestas |
+|---|---|---|---|---|
+| `POST` | `/api/v1/orders` | Registra un pedido | CU-1 | `201`, `422` |
+| `POST` | `/api/v1/delivery-notes` | Registra un albarán que referencia a un pedido | CU-2 | `201`, `404`, `422` |
+| `POST` | `/api/v1/invoices` | Emite una factura que referencia a un albarán | CU-3 | `201`, `404`, `422` |
+| `GET` | `/api/v1/documents/{id}` | Consulta un documento por identificador | CU-4 | `200`, `404` |
+| `GET` | `/api/v1/documents` | Lista documentos. Filtros: `type`, `customer`, `series`, `from`, `to`, `status` | CU-5 | `200` |
+| `POST` | `/api/v1/documents/{id}/cancel` | Anula un pedido o albarán no facturado | CU-6 (extra) | `200`, `404`, `409` |
+| `GET` | `/api/v1/documents/{id}/discrepancies` | Detecta diferencias entre pedido, albarán y factura | CU-7 (extra) | `200`, `404` |
+| `POST` | `/api/v1/invoices/{id}/corrections` | Emite una factura rectificativa | CU-8 (extra) | `201`, `404`, `422` |
+
+### traceability-service
+
+| Método | Ruta | Descripción | CU | Respuestas |
+|---|---|---|---|---|
+| `POST` | `/api/v1/traceability/events` | Registra un evento con su hash encadenado. **Interno**: se alimenta de la cola y no se publica en el gateway | CU-9 | `201`, `422` |
+| `GET` | `/api/v1/traceability/documents/{id}/verification` | Verifica la integridad de la cadena de registros | CU-10 | `200`, `404` |
+| `GET` | `/api/v1/traceability/documents/{id}/chain` | Devuelve la cadena documental (pedido → albarán → factura) | CU-11 | `200`, `404` |
+| `GET` | `/api/v1/traceability/documents/{id}/events` | Devuelve el histórico de eventos de un documento | CU-12 | `200`, `404` |
+
+### submission-service
+
+| Método | Ruta | Descripción | CU | Respuestas |
+|---|---|---|---|---|
+| `POST` | `/api/v1/submissions` | Solicita el envío de una factura a la AEAT simulada | CU-13 | `202`, `404`, `409` |
+| `GET` | `/api/v1/submissions/{id}` | Consulta el estado de un envío | CU-14 | `200`, `404` |
+| `GET` | `/api/v1/submissions` | Lista envíos. Filtros: `invoiceId`, `status` | CU-14, CU-16 (extra) | `200` |
+| `POST` | `/api/v1/submissions/{id}/retry` | Reintenta manualmente un envío fallido o rechazado | CU-15 (extra) | `202`, `404`, `409` |
+
+Normalmente el envío se dispara solo al recibir el evento `invoice.issued`. `POST /api/v1/submissions` permite lanzarlo manualmente.
+
+### Ejemplos
+
+**Emitir una factura** (`POST /api/v1/invoices`):
+
+```json
+{
+  "deliveryNoteId": "9a7b2d1e-4c3f-4e6a-8b0d-2f5c1a7e9d34",
+  "series": "A",
+  "customer": { "taxId": "B12345678", "name": "Suministros Granada S.L." },
+  "lines": [
+    { "description": "Servicio de mantenimiento", "quantity": 2, "unitPrice": 150.00, "taxRate": 21 }
+  ]
+}
+```
+
+Respuesta `201 Created`:
+
+```json
+{
+  "id": "5d2e8a6c-1f40-4b9a-9c77-3e0a6b4d1f52",
+  "type": "INVOICE",
+  "series": "A",
+  "number": "A-2026-000001",
+  "deliveryNoteId": "9a7b2d1e-4c3f-4e6a-8b0d-2f5c1a7e9d34",
+  "taxableBase": 300.00,
+  "taxAmount": 63.00,
+  "total": 363.00,
+  "status": "ISSUED",
+  "issuedAt": "2026-10-14T09:30:00Z"
+}
+```
+
+**Consultar la cadena documental** (`GET /api/v1/traceability/documents/{id}/chain`):
+
+```json
+{
+  "invoiceId": "5d2e8a6c-1f40-4b9a-9c77-3e0a6b4d1f52",
+  "chain": [
+    { "type": "ORDER", "id": "3f1c0b7a-...", "issuedAt": "2026-10-10T08:00:00Z" },
+    { "type": "DELIVERY_NOTE", "id": "9a7b2d1e-...", "issuedAt": "2026-10-12T10:15:00Z" },
+    { "type": "INVOICE", "id": "5d2e8a6c-...", "issuedAt": "2026-10-14T09:30:00Z" }
+  ]
+}
+```
+
+**Verificar la integridad** (`GET /api/v1/traceability/documents/{id}/verification`):
+
+```json
+{ "documentId": "5d2e8a6c-...", "valid": true, "eventsChecked": 3, "firstInvalidSequence": null }
+```
+
+**Estado de un envío** (`GET /api/v1/submissions/{id}`):
+
+```json
+{
+  "id": "c8f4a1d0-...",
+  "invoiceId": "5d2e8a6c-...",
+  "status": "RETRYING",
+  "attempts": 2,
+  "nextAttemptAt": "2026-10-14T09:34:00Z",
+  "lastError": "AEAT_UNAVAILABLE"
+}
+```
+
+### Estados y reglas
+
+- **Documento**: `ISSUED` o `CANCELLED`. Una factura emitida no se puede anular, solo rectificar.
+- **Envío**: `PENDING` → `SENT` → `ACCEPTED` o `REJECTED`. Ante un fallo transitorio pasa a `RETRYING` con espera creciente y, agotados los intentos, a `FAILED`.
+- **Hash encadenado**: cada evento guarda `sequence`, `previousHash` y `hash`, calculado como SHA-256 del contenido canónico del evento concatenado con `previousHash`. La verificación recalcula la cadena y devuelve la primera posición inválida si la hay.
+- **Autenticación**: queda fuera del MVP. Se planteará una clave de API en cabecera (`X-API-Key`) en hitos posteriores.
 
 ## Gestión del proyecto
 
