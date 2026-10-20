@@ -1,0 +1,19 @@
+# Python caches and virtual environments
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+
+# Tests and tooling configuration (not needed at runtime)
+tests/
+pyproject.toml
+
+# Local secrets: never bake them into an image
+.env
+.env.*
+
+# Docker files themselves
+Dockerfile
+.dockerignore
