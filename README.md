@@ -12,8 +12,9 @@ Aplicación nativa de la nube para la emisión y la trazabilidad de facturación
 4. [Arquitectura](#arquitectura)
 5. [Especificación de la API REST](#especificación-de-la-api-rest)
 6. [Desarrollo local](#desarrollo-local)
-7. [Gestión del proyecto](#gestión-del-proyecto)
-8. [Licencia](#licencia)
+7. [Documentación](#documentación)
+8. [Gestión del proyecto](#gestión-del-proyecto)
+9. [Licencia](#licencia)
 
 ## Descripción del dominio y casos de uso
 
@@ -343,6 +344,12 @@ El linter y el formateo se comprueban desde la raíz del repositorio:
 ruff check .
 ruff format --check .
 ```
+
+## Documentación
+
+Documentación adicional del proyecto, en la carpeta [`docs/`](docs/):
+
+- [Empaquetado con Docker](docs/docker.md): estructura de los Dockerfiles y decisiones de diseño de las imágenes.
 
 ## Gestión del proyecto
 
