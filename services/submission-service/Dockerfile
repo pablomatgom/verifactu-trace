@@ -3,12 +3,6 @@
 # ---- Build stage: install the dependencies into an isolated virtualenv ----
 FROM python:3.12-slim AS builder
 
-# Build tools live only in this stage: they are needed to compile native extensions
-# and are discarded, so they never reach the runtime image.
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential \
-    && rm -rf /var/lib/apt/lists/*
-
 ENV PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1
 
@@ -19,7 +13,10 @@ ENV PATH="/opt/venv/bin:$PATH"
 # Copy only the requirements first so this layer is cached until it changes.
 WORKDIR /build
 COPY requirements.txt .
-RUN pip install -r requirements.txt
+
+# Install prebuilt wheels only: a package without a wheel fails the build instead of
+# running the setup script of a source distribution.
+RUN pip install --only-binary :all: -r requirements.txt
 
 
 # ---- Runtime stage: only the virtualenv and the application code ----
