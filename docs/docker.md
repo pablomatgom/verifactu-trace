@@ -23,7 +23,8 @@ El servicio responde en `http://localhost:8001/health`.
 |---|---|---|
 | Imagen base | `python:3.12-slim` | Basada en Debian y con solo lo imprescindible. La imagen completa de Python incluye compiladores y herramientas de sistema que no se necesitan en ejecución y la hacen más pesada |
 | Alternativas descartadas | `alpine` y `distroless` | `alpine` usa musl en lugar de glibc, y no todos los paquetes de Python publican binarios para él, por lo que habría que compilarlos. `distroless` no incluye shell, lo que dificulta depurar, y el ahorro de tamaño a esta escala es pequeño |
-| Construcción multietapa | Etapa `builder` y etapa `runtime` | Las herramientas de compilación (`build-essential`) solo existen en la primera etapa y se descartan, por lo que nunca llegan a la imagen final |
+| Construcción multietapa | Etapa `builder` y etapa `runtime` | La etapa `builder` instala las dependencias y la etapa `runtime` solo recibe el entorno virtual resultante y el código. `pip` y sus herramientas de instalación no llegan a la imagen final |
+| Instalación de dependencias | `pip install --only-binary :all:` | Solo se instalan paquetes precompilados (*wheels*). Si una dependencia no tiene *wheel*, el build falla en lugar de ejecutar el script de instalación de un paquete fuente, lo que reduce el riesgo de cadena de suministro. Por eso la imagen de build no necesita compilador |
 | Dependencias | Entorno virtual en `/opt/venv` | Deja todas las librerías en una única carpeta que se copia en bloque a la etapa final con `COPY --from=builder` |
 | Caché de capas | `requirements.txt` se copia y se instala antes que el código | Si solo cambia el código, la capa de dependencias se reutiliza y la construcción tarda segundos |
 | Usuario | `appuser`, usuario de sistema sin shell ni directorio personal | Principio de mínimo privilegio: el proceso no se ejecuta como `root` |
@@ -35,6 +36,10 @@ El servicio responde en `http://localhost:8001/health`.
 ## Contexto de build y `.dockerignore`
 
 El contexto de build es la carpeta de cada servicio, por lo que su `.dockerignore` está en esa misma carpeta, ya que Docker lo busca en la raíz del contexto. Excluye cachés de Python, entornos virtuales, tests, la configuración de herramientas y los ficheros `.env`, de modo que la imagen solo contiene `app/` y no se cuelan credenciales por error.
+
+## Limitaciones conocidas
+
+Los `requirements.txt` fijan rangos de versiones (por ejemplo `fastapi>=0.115,<1`) y no versiones exactas con *hashes*, por lo que dos construcciones en fechas distintas pueden instalar versiones diferentes. Bloquear las dependencias con un *lockfile* con *hashes* (`pip-compile --generate-hashes` e instalación con `--require-hashes`) se aborda en el hito de seguridad.
 
 ## Verificación
 
