@@ -11,8 +11,9 @@ Aplicación nativa de la nube para la emisión y la trazabilidad de facturación
 3. [Actores NIST SP 500-292](#actores-nist-sp-500-292)
 4. [Arquitectura](#arquitectura)
 5. [Especificación de la API REST](#especificación-de-la-api-rest)
-6. [Gestión del proyecto](#gestión-del-proyecto)
-7. [Licencia](#licencia)
+6. [Desarrollo local](#desarrollo-local)
+7. [Gestión del proyecto](#gestión-del-proyecto)
+8. [Licencia](#licencia)
 
 ## Descripción del dominio y casos de uso
 
@@ -294,6 +295,54 @@ Respuesta `201 Created`:
 - **Envío**: `PENDING` → `SENT` → `ACCEPTED` o `REJECTED`. Ante un fallo transitorio pasa a `RETRYING` con espera creciente y, agotados los intentos, a `FAILED`.
 - **Hash encadenado**: cada evento guarda `sequence`, `previousHash` y `hash`, calculado como SHA-256 del contenido canónico del evento concatenado con `previousHash`. La verificación recalcula la cadena y devuelve la primera posición inválida si la hay.
 - **Autenticación**: queda fuera del MVP. Se planteará una clave de API en cabecera (`X-API-Key`) en hitos posteriores.
+
+## Desarrollo local
+
+### Estructura del repositorio
+
+```
+services/
+├── document-service/        # puerto 8001
+├── traceability-service/    # puerto 8002
+└── submission-service/      # puerto 8003
+```
+
+Cada servicio es una aplicación FastAPI independiente con su código en `app/`, sus pruebas en `tests/` y sus dependencias en `requirements.txt`. `requirements-dev.txt` agrupa las de los tres servicios y las herramientas de desarrollo, y `ruff.toml` la configuración común del linter.
+
+### Preparar el entorno
+
+Requiere Python 3.12 o superior.
+
+```bash
+python -m venv .venv
+source .venv/bin/activate        # en Windows: .venv\Scripts\activate
+pip install -r requirements-dev.txt
+```
+
+### Ejecutar un servicio
+
+```bash
+cd services/document-service
+uvicorn app.main:app --port 8001 --reload
+```
+
+Cada servicio responde en `GET /health` y publica su documentación OpenAPI en `/docs`.
+
+### Pruebas y linter
+
+Las pruebas se ejecutan por servicio, porque todos usan el paquete `app`:
+
+```bash
+cd services/document-service
+python -m pytest
+```
+
+El linter y el formateo se comprueban desde la raíz del repositorio:
+
+```bash
+ruff check .
+ruff format --check .
+```
 
 ## Gestión del proyecto
 

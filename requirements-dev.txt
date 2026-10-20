@@ -1,0 +1,7 @@
+# Development dependencies shared by all services.
+-r services/document-service/requirements.txt
+-r services/traceability-service/requirements.txt
+-r services/submission-service/requirements.txt
+pytest>=8.0,<9
+httpx2
+ruff>=0.6

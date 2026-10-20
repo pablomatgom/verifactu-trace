@@ -1,0 +1,6 @@
+# document-service: configuración de pytest.
+# Las dependencias están en requirements.txt y el linter se configura en el ruff.toml de la raíz.
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
