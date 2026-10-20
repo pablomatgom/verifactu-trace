@@ -1,0 +1,11 @@
+line-length = 100
+target-version = "py312"
+
+[lint]
+extend-select = ["I"]
+
+[lint.isort]
+known-first-party = ["app"]
+
+[format]
+docstring-code-format = true
