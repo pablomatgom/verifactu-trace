@@ -350,6 +350,7 @@ ruff format --check .
 Documentación adicional del proyecto, en la carpeta [`docs/`](docs/):
 
 - [Empaquetado con Docker](docs/docker.md): estructura de los Dockerfiles y decisiones de diseño de las imágenes.
+- [Entorno local con Docker Compose](docs/compose.md): puesta en marcha del sistema completo, redes, volúmenes y decisiones de diseño.
 
 ## Gestión del proyecto
 
