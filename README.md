@@ -381,6 +381,7 @@ Cada pull request hacia `main` y cada push a `main` ejecutan dos workflows de [G
 |---|---|---|
 | [`ci.yml`](.github/workflows/ci.yml) | `Lint` | `ruff check` y `ruff format --check` sobre todo el repositorio |
 | [`ci.yml`](.github/workflows/ci.yml) | `Test` | `pytest` de cada servicio, en una matriz con un trabajo por servicio |
+| [`ci.yml`](.github/workflows/ci.yml) | `Integration` | Levanta el sistema completo con Docker Compose y comprueba la salud de los servicios y los esquemas de PostgreSQL |
 | [`docker.yml`](.github/workflows/docker.yml) | `Hadolint` | Análisis del `Dockerfile` de cada servicio |
 | [`docker.yml`](.github/workflows/docker.yml) | `Build` | Construcción de la imagen de cada servicio y, fuera de los pull requests, su publicación |
 
@@ -405,6 +406,7 @@ ruff check . && ruff format --check .                                  # lint
 cd services/document-service && python -m pytest                       # tests de un servicio
 docker run --rm -i hadolint/hadolint < services/document-service/Dockerfile   # análisis del Dockerfile
 docker build -t document-service services/document-service             # construcción de la imagen
+docker compose up --build --wait                                       # integración (requiere .env)
 ```
 
 El detalle de los workflows, los permisos y las decisiones de diseño está en [`docs/ci.md`](docs/ci.md).
