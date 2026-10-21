@@ -2,7 +2,10 @@
 
 Aplicación nativa de la nube para la emisión y la trazabilidad de facturación electrónica B2B, desarrollada como proyecto de prácticas de la asignatura *Cloud Computing: Fundamentos e Infraestructuras* (Máster en Ingeniería Informática, Universidad de Granada).
 
-> **Estado:** Hito 1 completado.
+[![CI](https://github.com/pablomatgom/verifactu-trace/actions/workflows/ci.yml/badge.svg)](https://github.com/pablomatgom/verifactu-trace/actions/workflows/ci.yml)
+[![Docker](https://github.com/pablomatgom/verifactu-trace/actions/workflows/docker.yml/badge.svg)](https://github.com/pablomatgom/verifactu-trace/actions/workflows/docker.yml)
+
+> **Estado:** Hito 1 completado. Hito 2 (empaquetado cloud native, entorno local e integración continua) en curso.
 
 ## Índice
 
@@ -12,9 +15,10 @@ Aplicación nativa de la nube para la emisión y la trazabilidad de facturación
 4. [Arquitectura](#arquitectura)
 5. [Especificación de la API REST](#especificación-de-la-api-rest)
 6. [Desarrollo local](#desarrollo-local)
-7. [Documentación](#documentación)
-8. [Gestión del proyecto](#gestión-del-proyecto)
-9. [Licencia](#licencia)
+7. [Integración continua](#integración-continua)
+8. [Documentación](#documentación)
+9. [Gestión del proyecto](#gestión-del-proyecto)
+10. [Licencia](#licencia)
 
 ## Descripción del dominio y casos de uso
 
@@ -329,6 +333,30 @@ uvicorn app.main:app --port 8001 --reload
 
 Cada servicio responde en `GET /health` y publica su documentación OpenAPI en `/docs`.
 
+### Ejecutar todo el sistema con Docker Compose
+
+Levanta los tres servicios, PostgreSQL y Redis con un único comando. Requiere Docker con Compose v2.
+
+```bash
+cp .env.example .env        # en Windows (PowerShell): Copy-Item .env.example .env
+docker compose up --build
+```
+
+`.env` contiene las credenciales de PostgreSQL, está excluido de Git y se crea a partir de `.env.example`, que solo lleva valores de ejemplo. Una vez arrancado, cada servicio responde en su puerto:
+
+| Servicio | Comprobación de salud |
+|---|---|
+| `document-service` | http://localhost:8001/health |
+| `traceability-service` | http://localhost:8002/health |
+| `submission-service` | http://localhost:8003/health |
+
+```bash
+docker compose ps           # estado y salud de cada contenedor
+docker compose down         # detiene el sistema y conserva los datos
+docker compose down -v      # detiene el sistema y borra los datos
+```
+
+PostgreSQL y Redis solo son accesibles desde los demás contenedores, y los puertos de los servicios se publican únicamente en `127.0.0.1`. Las redes, los volúmenes y las decisiones de diseño están en [`docs/compose.md`](docs/compose.md).
 ### Pruebas y linter
 
 Las pruebas se ejecutan por servicio, porque todos usan el paquete `app`:
@@ -345,12 +373,48 @@ ruff check .
 ruff format --check .
 ```
 
+## Integración continua
+
+Cada pull request hacia `main` y cada push a `main` ejecutan dos workflows de [GitHub Actions](.github/workflows/). El resultado se muestra en el propio pull request antes de mergearlo.
+
+| Workflow | Trabajo | Qué comprueba |
+|---|---|---|
+| [`ci.yml`](.github/workflows/ci.yml) | `Lint` | `ruff check` y `ruff format --check` sobre todo el repositorio |
+| [`ci.yml`](.github/workflows/ci.yml) | `Test` | `pytest` de cada servicio, en una matriz con un trabajo por servicio |
+| [`docker.yml`](.github/workflows/docker.yml) | `Hadolint` | Análisis del `Dockerfile` de cada servicio |
+| [`docker.yml`](.github/workflows/docker.yml) | `Build` | Construcción de la imagen de cada servicio y, fuera de los pull requests, su publicación |
+
+Además, SonarCloud analiza el código y los Dockerfiles en cada pull request.
+
+### Imágenes publicadas
+
+Al mergear a `main`, o al subir un tag `v*`, `docker.yml` publica una imagen por servicio en GitHub Container Registry (`ghcr.io/pablomatgom/verifactu-trace/<servicio>`):
+
+| Etiqueta | Cuándo se crea |
+|---|---|
+| `sha-<commit>` | En cada push a `main` |
+| `latest` | En cada push a `main` |
+| `1.0.0` | Al subir el tag `v1.0.0` |
+
+En un pull request la imagen se construye para comprobar que el Dockerfile funciona, pero **no se publica**.
+
+### Reproducir las comprobaciones en local
+
+```bash
+ruff check . && ruff format --check .                                  # lint
+cd services/document-service && python -m pytest                       # tests de un servicio
+docker run --rm -i hadolint/hadolint < services/document-service/Dockerfile   # análisis del Dockerfile
+docker build -t document-service services/document-service             # construcción de la imagen
+```
+
+El detalle de los workflows, los permisos y las decisiones de diseño está en [`docs/ci.md`](docs/ci.md).
 ## Documentación
 
 Documentación adicional del proyecto, en la carpeta [`docs/`](docs/):
 
 - [Empaquetado con Docker](docs/docker.md): estructura de los Dockerfiles y decisiones de diseño de las imágenes.
 - [Entorno local con Docker Compose](docs/compose.md): puesta en marcha del sistema completo, redes, volúmenes y decisiones de diseño.
+- [Integración continua](docs/ci.md): lint, tests, análisis de Dockerfiles y publicación de imágenes en GHCR.
 
 ## Gestión del proyecto
 
