@@ -11,7 +11,7 @@ Ambos se lanzan en cada pull request hacia `main` y en cada push a `main`. `dock
 
 ## CI: lint y tests
 
-`ci.yml` tiene dos trabajos independientes, que se ejecutan en paralelo: `lint` y `test`. Si uno falla, el otro termina igualmente y se ven los dos resultados.
+`ci.yml` tiene tres trabajos independientes, que se ejecutan en paralelo: `lint`, `test` e `integration`. Si uno falla, los otros terminan igualmente y se ven todos los resultados.
 
 ### Trabajos
 
@@ -19,6 +19,7 @@ Ambos se lanzan en cada pull request hacia `main` y en cada push a `main`. `dock
 |---|---|---|
 | `lint` | Comprueba el estilo y los errores comunes, y que el código está formateado | `ruff check .` y `ruff format --check .` |
 | `test` | Ejecuta las pruebas de un servicio. Una instancia por servicio (`document-service`, `traceability-service` y `submission-service`) | `python -m pytest` desde `services/<servicio>` |
+| `integration` | Levanta el sistema completo con Docker Compose y comprueba que los cinco contenedores funcionan juntos | `docker compose up --build --wait` |
 
 Ambos usan Python 3.12, la misma versión que las imágenes Docker, y instalan las dependencias desde `requirements-dev.txt`, que agrupa las de los tres servicios y las herramientas de desarrollo.
 
@@ -35,6 +36,19 @@ La configuración está en [`ruff.toml`](../ruff.toml), y es la misma en local y
 Cada servicio tiene sus pruebas en `tests/` y las ejecuta `pytest`. De momento solo comprueban `GET /health`, y crecerán con cada historia de usuario. Usan el cliente de pruebas de FastAPI (`TestClient`), que llama a la aplicación sin levantar un servidor.
 
 `pytest` se lanza **por servicio**, desde su carpeta, y no una sola vez desde la raíz. Los tres servicios tienen un paquete llamado `app`, y al ejecutarlos juntos Python solo importaría uno de ellos. La carpeta de cada servicio se añade al `pythonpath` mediante su `pyproject.toml`.
+
+### Prueba de integración con Docker Compose
+
+Las pruebas unitarias comprueban cada servicio por separado. El trabajo `integration` comprueba lo que ellas no pueden: que las piezas funcionan **juntas**. Es el mismo procedimiento que se sigue en local, automatizado:
+
+1. Crea `.env` a partir de `.env.example`.
+2. Ejecuta `docker compose up --build --wait --wait-timeout 180`. Construye las tres imágenes y espera a que todos los contenedores estén sanos. Si alguno no lo consigue en tres minutos, el trabajo falla.
+3. Llama a `GET /health` de cada servicio en los puertos `8001`, `8002` y `8003`, con reintentos.
+4. Consulta PostgreSQL y comprueba que existen los tres esquemas (`documents`, `traceability` y `submissions`), lo que verifica que el script de inicialización se ejecutó.
+5. Si algo falla, muestra los logs de todos los contenedores.
+6. Siempre, al terminar, apaga el sistema y elimina los volúmenes (`docker compose down -v`).
+
+Con ello se valida además el propio `compose.yaml`: las redes, el orden de arranque y las comprobaciones de salud. Cuando existan historias de usuario con base de datos, se ampliará con pruebas reales de la API sobre este mismo entorno.
 
 ### Decisiones de diseño
 
@@ -128,4 +142,6 @@ GHCR crea cada paquete como **privado** la primera vez que se publica. Si las im
 - Los SHA de las acciones se actualizan a mano. Dependabot podría proponer las actualizaciones automáticamente.
 - Los tests no miden cobertura. Se puede añadir cuando haya lógica de negocio que cubrir.
 - Los workflows no definen `timeout-minutes` ni `concurrency`. Un trabajo colgado consume minutos hasta el límite de GitHub, y varios push seguidos a la misma rama lanzan ejecuciones que no se cancelan entre sí.
-- Los tests de integración contra PostgreSQL y Redis todavía no se ejecutan en CI. Se añadirán con las historias que usen la base de datos.
+- La prueba de integración solo comprueba que el sistema arranca y que los esquemas existen. Los servicios todavía no usan la base de datos ni Redis, así que las pruebas funcionales de la API contra PostgreSQL se añadirán con las historias de usuario.
+- El trabajo `integration` reconstruye las imágenes en cada ejecución, sin la caché de capas que sí usa `docker.yml`.
+- El trabajo `integration` tiene `timeout-minutes: 10`. Los demás trabajos del repositorio todavía no definen límite de tiempo.
