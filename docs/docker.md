@@ -27,10 +27,10 @@ El servicio responde en `http://localhost:8001/health`.
 | Instalación de dependencias | `pip install --only-binary :all:` | Solo se instalan paquetes precompilados (*wheels*). Si una dependencia no tiene *wheel*, el build falla en lugar de ejecutar el script de instalación de un paquete fuente, lo que reduce el riesgo de cadena de suministro. Por eso la imagen de build no necesita compilador |
 | Dependencias | Entorno virtual en `/opt/venv` | Deja todas las librerías en una única carpeta que se copia en bloque a la etapa final con `COPY --from=builder` |
 | Caché de capas | `requirements.txt` se copia y se instala antes que el código | Si solo cambia el código, la capa de dependencias se reutiliza y la construcción tarda segundos |
-| Usuario | `appuser`, usuario de sistema sin shell ni directorio personal | Principio de mínimo privilegio: el proceso no se ejecuta como `root` |
+| Usuario | `appuser`, usuario de sistema sin shell ni directorio personal, con UID y GID fijos `10001` | Principio de mínimo privilegio: el proceso no se ejecuta como `root`. `USER` usa el UID numérico porque un orquestador no puede comprobar que un nombre no es `root`, y Hadolint lo exige (`DL3066`) |
 | Variables de Python | `PYTHONUNBUFFERED=1` y `PYTHONDONTWRITEBYTECODE=1` | Los logs salen por `stdout` sin retraso, algo necesario para observarlos en un contenedor, y no se generan ficheros `.pyc` inútiles |
 | Variables de `pip` | `PIP_NO_CACHE_DIR=1` y `PIP_DISABLE_PIP_VERSION_CHECK=1` | Evitan guardar la caché de descargas en la imagen y una consulta de red innecesaria |
-| Comprobación de salud | `HEALTHCHECK` sobre `GET /health` con `urllib` | Docker marca el contenedor como sano o no sano. Se usa `urllib` porque la imagen `slim` no incluye `curl` |
+| Comprobación de salud | `HEALTHCHECK` sobre `GET /health` con `urllib`, en formato JSON | Docker marca el contenedor como sano o no sano. Se usa `urllib` porque la imagen `slim` no incluye `curl`. El formato JSON evita lanzar un shell intermedio (`DL3025`) |
 | Arranque | `uvicorn` con `--host 0.0.0.0` | Si escuchara solo en `127.0.0.1`, no sería accesible desde fuera del contenedor |
 
 ## Contexto de build y `.dockerignore`

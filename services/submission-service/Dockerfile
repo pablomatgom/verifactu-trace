@@ -28,19 +28,20 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PATH="/opt/venv/bin:$PATH"
 
 # Run as an unprivileged user.
-RUN groupadd --system appgroup \
-    && useradd --system --gid appgroup --no-create-home --shell /usr/sbin/nologin appuser
+# A fixed numeric UID lets orchestrators verify that the container does not run as root.
+RUN groupadd --system --gid 10001 appgroup \
+    && useradd --system --uid 10001 --gid appgroup --no-create-home --shell /usr/sbin/nologin appuser
 
 COPY --from=builder /opt/venv /opt/venv
 
 WORKDIR /srv
 COPY --chown=appuser:appgroup app ./app
 
-USER appuser
+USER 10001:10001
 
 EXPOSE 8003
 
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-    CMD python -c "import sys, urllib.request; sys.exit(0 if urllib.request.urlopen('http://localhost:8003/health').status == 200 else 1)"
+    CMD ["python", "-c", "import sys, urllib.request; sys.exit(0 if urllib.request.urlopen('http://localhost:8003/health').status == 200 else 1)"]
 
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8003"]
