@@ -36,6 +36,8 @@ COPY --from=builder /opt/venv /opt/venv
 
 WORKDIR /srv
 COPY --chown=appuser:appgroup app ./app
+COPY --chown=appuser:appgroup alembic.ini ./
+COPY --chown=appuser:appgroup migrations ./migrations
 
 USER 10001:10001
 
@@ -44,4 +46,5 @@ EXPOSE 8001
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
     CMD ["python", "-c", "import sys, urllib.request; sys.exit(0 if urllib.request.urlopen('http://localhost:8001/health').status == 200 else 1)"]
 
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8001"]
+# Apply the pending migrations, then replace the shell with uvicorn so it receives the stop signals.
+CMD ["sh", "-c", "alembic upgrade head && exec uvicorn app.main:app --host 0.0.0.0 --port 8001"]

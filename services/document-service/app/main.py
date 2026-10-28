@@ -1,8 +1,8 @@
 from fastapi import FastAPI
 
-app = FastAPI(title="document-service", version="0.1.0")
+from app.api import health
+from app.api.health import SERVICE_NAME
 
+app = FastAPI(title=SERVICE_NAME, version="0.1.0")
 
-@app.get("/health")
-def health() -> dict[str, str]:
-    return {"status": "ok", "service": "document-service"}
+app.include_router(health.router)

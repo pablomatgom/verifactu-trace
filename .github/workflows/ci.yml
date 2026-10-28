@@ -40,6 +40,23 @@ jobs:
       fail-fast: false
       matrix:
         service: [document-service, traceability-service, submission-service]
+    # Throwaway database for the integration tests of the services that use PostgreSQL.
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: verifactu
+          POSTGRES_PASSWORD: test-only
+          POSTGRES_DB: verifactu
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U verifactu -d verifactu"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://verifactu:test-only@localhost:5432/verifactu
     defaults:
       run:
         working-directory: services/${{ matrix.service }}
@@ -91,6 +108,14 @@ jobs:
             "SELECT count(*) FROM information_schema.schemata WHERE schema_name IN ('documents', 'traceability', 'submissions')")
           echo "Schemas found: $schemas"
           test "$schemas" = "3"
+
+      - name: Check the migrations
+        run: |
+          set -a; . ./.env; set +a
+          version=$(docker compose exec -T postgres psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -tAc \
+            "SELECT version_num FROM documents.alembic_version")
+          echo "document-service migration: $version"
+          test -n "$version"
 
       - name: Show logs on failure
         if: failure()

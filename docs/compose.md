@@ -60,7 +60,7 @@ docker compose exec postgres psql -U verifactu -d verifactu   # consola de Postg
 
 Una única instancia de PostgreSQL aloja un esquema por servicio (`documents`, `traceability` y `submissions`). Los crea el script [`db/init/01-schemas.sql`](../db/init/01-schemas.sql), que PostgreSQL ejecuta **solo la primera vez**, cuando el volumen de datos está vacío. Si modificas el script y no ves ningún cambio, es porque el volumen `postgres-data` ya contiene datos y PostgreSQL no vuelve a ejecutarlo. Para forzarlo hay que eliminar el volumen con `docker compose down -v`, lo que **borra los datos** de la base de datos.
 
-Cada servicio recibe en sus variables de entorno la URL de conexión (`DATABASE_URL`), su esquema (`DATABASE_SCHEMA`) y la URL de Redis (`REDIS_URL`). Los servicios todavía no las utilizan.
+Cada servicio recibe en sus variables de entorno la URL de conexión (`DATABASE_URL`), su esquema (`DATABASE_SCHEMA`) y la URL de Redis (`REDIS_URL`). De momento solo `document-service` las utiliza, y aplica sus migraciones al arrancar (ver [`database.md`](database.md)). Los otros dos las recibirán cuando necesiten base de datos.
 
 Si la contraseña de `.env` contiene caracteres especiales, deben codificarse como URL en `DATABASE_URL`.
 

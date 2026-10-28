@@ -32,6 +32,7 @@ El servicio responde en `http://localhost:8001/health`.
 | Variables de `pip` | `PIP_NO_CACHE_DIR=1` y `PIP_DISABLE_PIP_VERSION_CHECK=1` | Evitan guardar la caché de descargas en la imagen y una consulta de red innecesaria |
 | Comprobación de salud | `HEALTHCHECK` sobre `GET /health` con `urllib`, en formato JSON | Docker marca el contenedor como sano o no sano. Se usa `urllib` porque la imagen `slim` no incluye `curl`. El formato JSON evita lanzar un shell intermedio (`DL3025`) |
 | Arranque | `uvicorn` con `--host 0.0.0.0` | Si escuchara solo en `127.0.0.1`, no sería accesible desde fuera del contenedor |
+| Migraciones | `document-service` ejecuta `alembic upgrade head` antes de `uvicorn`, con `exec` | La imagen lleva `alembic.ini` y `migrations/`. Un fallo de migración impide que el servicio arranque, y `exec` hace que `uvicorn` reciba las señales de parada. Ver [`database.md`](database.md) |
 
 ## Contexto de build y `.dockerignore`
 

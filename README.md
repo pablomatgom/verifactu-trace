@@ -359,7 +359,7 @@ docker compose down -v      # detiene el sistema y borra los datos
 PostgreSQL y Redis solo son accesibles desde los demás contenedores, y los puertos de los servicios se publican únicamente en `127.0.0.1`. Las redes, los volúmenes y las decisiones de diseño están en [`docs/compose.md`](docs/compose.md).
 ### Pruebas y linter
 
-Las pruebas se ejecutan por servicio, porque todos usan el paquete `app`:
+Las pruebas se ejecutan por servicio, porque todos usan el paquete `app`. Las de `document-service` necesitan una PostgreSQL y leen su URL de `DATABASE_URL`; sin ella, las que dependen de la base de datos se omiten (ver [`docs/database.md`](docs/database.md)):
 
 ```bash
 cd services/document-service
@@ -410,12 +410,15 @@ docker compose up --build --wait                                       # integra
 ```
 
 El detalle de los workflows, los permisos y las decisiones de diseño está en [`docs/ci.md`](docs/ci.md).
+
 ## Documentación
 
 Documentación adicional del proyecto, en la carpeta [`docs/`](docs/):
 
 - [Empaquetado con Docker](docs/docker.md): estructura de los Dockerfiles y decisiones de diseño de las imágenes.
 - [Entorno local con Docker Compose](docs/compose.md): puesta en marcha del sistema completo, redes, volúmenes y decisiones de diseño.
+- [Arquitectura interna de los servicios](docs/arquitectura.md): arquitectura en capas (api, services, repositories), su equivalencia con controller/service/repository y reglas.
+- [Capa de datos y migraciones](docs/database.md): estructura por capas de los servicios, migraciones con Alembic y tests con PostgreSQL.
 - [Integración continua](docs/ci.md): lint, tests, análisis de Dockerfiles y publicación de imágenes en GHCR.
 
 ## Gestión del proyecto
