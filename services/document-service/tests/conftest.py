@@ -40,7 +40,7 @@ def engine(alembic_cfg: Config) -> Engine:
             pytest.fail("DATABASE_URL is not set")
         # Locally, only the tests that need the database are skipped; the rest still run.
         pytest.skip("DATABASE_URL is not set: start a PostgreSQL and point it to it")
-    
+
     # Same command the container runs on start. Doing it here also tests the migrations,
     # and creates the tables before any test needs them.
     command.upgrade(alembic_cfg, "head")
@@ -53,7 +53,7 @@ def session(engine: Engine) -> Iterator[Session]:
     with engine.connect() as connection:
         # Outer transaction that nobody commits: it is what gets rolled back at the end.
         transaction = connection.begin()
-        
+
         # create_savepoint: if the code under test calls session.commit() (as a service will),
         # that only releases an inner savepoint and the outer transaction stays open, so
         # nothing is really saved so each test starts with the database as it was.

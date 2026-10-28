@@ -22,7 +22,7 @@ def test_schema_and_version_table_are_created_in_the_service_schema(
             .scalars()
             .all()
         )
-        
+
         # The version Alembic recorded, stored inside the service's own schema.
         version = connection.execute(
             text(f'SELECT version_num FROM "{schema}".alembic_version')
