@@ -12,8 +12,8 @@ services/document-service/
 │   ├── script.py.mako       # plantilla de las migraciones nuevas
 │   └── versions/            # una migración por cambio del esquema
 ├── app/
-│   ├── api/                 # capa HTTP: rutas y esquemas de entrada y salida
-│   ├── services/            # capa de negocio: reglas, numeración, impuestos
+│   ├── api/                 # capa HTTP: rutas, esquemas de entrada y salida y formato de errores
+│   ├── services/            # capa de negocio: reglas, numeración, importes
 │   ├── repositories/        # capa de datos: consultas contra el esquema
 │   ├── models/              # modelos de SQLAlchemy
 │   ├── config.py            # variables de entorno
@@ -46,6 +46,106 @@ Los paquetes de `app/` llevan `__init__.py` aunque Python 3 también importaría
 | `DATABASE_SCHEMA` | Esquema que pertenece al servicio | `documents` |
 
 Compose pasa `DATABASE_URL` con el formato `postgresql://...`. SQLAlchemy lo asociaría al controlador `psycopg2`, que no está instalado, por lo que `config.py` lo convierte a `postgresql+psycopg://` para usar psycopg 3. Así el `compose.yaml` y el `.env` no cambian.
+
+## Modelo de datos
+
+Pedidos, albaranes y facturas comparten una sola tabla, porque el contrato de la API los trata como un único recurso (`/documents`). Cada documento apunta al anterior de la cadena mediante `parent_id`. Hoy solo se crean pedidos (CU-1).
+
+```mermaid
+erDiagram
+    documents ||--o{ document_lines : "líneas (se borran con él)"
+    documents |o--o{ documents : "parent_id: documento anterior"
+
+    documents {
+        uuid id PK
+        varchar type "ORDER"
+        varchar number UK "P-2026-000001"
+        varchar status "ISSUED"
+        date issue_date
+        varchar customer_tax_id
+        numeric total_net
+        numeric total_vat
+        numeric total
+        uuid parent_id FK "vacío en un pedido"
+        timestamptz created_at
+    }
+    document_lines {
+        uuid id PK
+        uuid document_id FK
+        int position "desde 1"
+        varchar description
+        numeric quantity "3 decimales"
+        numeric unit_price
+        numeric vat_rate "0 a 100"
+    }
+    document_counters {
+        varchar series PK "P"
+        int year PK
+        int last_number "último emitido"
+    }
+```
+
+La cadena de documentos se forma con `parent_id`: el albarán (CU-2) apuntará a su pedido y la factura (CU-3) a su albarán. `document_counters` queda suelta porque no tiene clave foránea: `documents.number` se construye con su valor, pero la base de datos no lo comprueba. El diagrama muestra las columnas clave, y las tablas de abajo las detallan todas.
+
+### Tablas
+
+**`documents`**: un documento de la cadena.
+
+| Columna | Tipo | Notas |
+|---|---|---|
+| `id` | `UUID` | Clave primaria, la asigna el servidor |
+| `type` | `VARCHAR(20)` | `ORDER` por ahora. Indexada |
+| `series` | `VARCHAR(10)` | `P` para los pedidos |
+| `number` | `VARCHAR(40)` | **Único**, como `P-2026-000001` |
+| `status` | `VARCHAR(20)` | `ISSUED` por ahora |
+| `issue_date` | `DATE` | La pone el servidor con la fecha de hoy |
+| `customer_name` | `VARCHAR(200)` | Nombre del cliente |
+| `customer_tax_id` | `VARCHAR(20)` | NIF/CIF del cliente. Indexada |
+| `total_net`, `total_vat`, `total` | `NUMERIC(12,2)` | Los calcula el servidor |
+| `parent_id` | `UUID` | Clave foránea a `documents.id`: el documento anterior de la cadena. Vacío en un pedido |
+| `created_at` | `TIMESTAMPTZ` | Valor por defecto `now()` en la base de datos |
+
+**`document_lines`**: las líneas de un documento. Se borran con él (`ON DELETE CASCADE`).
+
+| Columna | Tipo | Notas |
+|---|---|---|
+| `id` | `UUID` | Clave primaria |
+| `document_id` | `UUID` | Clave foránea a `documents.id`. Indexada |
+| `position` | `INTEGER` | Orden de la línea, desde 1 |
+| `description` | `VARCHAR(300)` | |
+| `quantity` | `NUMERIC(12,3)` | Mayor que cero, hasta 3 decimales |
+| `unit_price` | `NUMERIC(12,2)` | No negativo |
+| `vat_rate` | `NUMERIC(5,2)` | Entre 0 y 100 |
+
+**`document_counters`**: el último número emitido de cada serie y año. La clave primaria es (`series`, `year`), y `last_number` guarda el contador.
+
+### Decisiones de diseño
+
+| Tema | Decisión | Por qué |
+|---|---|---|
+| Tipos y estados | `DocumentType` y `DocumentStatus` son `StrEnum` de Python (`models/document.py`) y se guardan como texto, no como `ENUM` nativo | Añadir un valor a un `ENUM` de PostgreSQL exige una migración con `ALTER TYPE`. Con texto basta un miembro nuevo en la enumeración |
+| Series | `P` para los pedidos, definida en `services/numbering.py` junto al formato del número | Un solo sitio para saber cómo se numera cada tipo |
+| Importes | `NUMERIC` en la base de datos y `Decimal` en Python, nunca `float`. En el JSON viajan como números | Evita errores de redondeo binario |
+| Cálculo | Lo hace el servidor y la petición no puede enviarlo. Cada línea se redondea a céntimos (mitad hacia arriba) y el IVA se redondea **por línea** | Los totales cuadran con las líneas, como en una factura |
+| Restricciones | La base de datos repite las reglas de la API (cantidad > 0, precio ≥ 0, IVA entre 0 y 100) | Última defensa si algo salta la validación de la API |
+| Fechas | `created_at` es `timestamptz` e `issue_date` es una fecha sin hora | Una hora sin zona horaria sería ambigua |
+
+### Numeración correlativa
+
+El número sale de `document_counters` con una sola sentencia:
+
+```sql
+INSERT INTO document_counters (series, year, last_number) VALUES (:series, :year, 1)
+ON CONFLICT (series, year) DO UPDATE SET last_number = document_counters.last_number + 1
+RETURNING last_number
+```
+
+1. Actualizar la fila **la bloquea hasta el final de la transacción**, así que dos peticiones simultáneas reciben números distintos.
+2. El número y el documento se guardan en la **misma transacción**. Si la creación del documento falla, el *rollback* devuelve el número y no quedan huecos.
+
+El coste es que las peticiones de una misma serie y año se ponen en cola mientras dura la transacción. Para registrar pedidos es asumible.
+
+El esquema (`documents`) está escrito en las migraciones, porque Alembic lo fija al autogenerarlas.
 
 ## Migraciones con Alembic
 
@@ -131,6 +231,17 @@ El trabajo `test` levanta un contenedor de PostgreSQL como servicio y define `DA
 
 Los tests de las migraciones comprueban que el esquema y la tabla de versiones se crean, y que ejecutar `upgrade` dos veces es seguro, que es lo que hace cada réplica al arrancar.
 
+### Organización de `tests/`
+
+| Carpeta | Qué prueba | ¿PostgreSQL? |
+|---|---|---|
+| `tests/` (raíz) | Configuración, migraciones y `/health` | Según el test |
+| `tests/unit/` | Reglas de negocio puras: formato del número y cálculo de importes | No |
+| `tests/repositories/` | Consultas: el contador de numeración | Sí |
+| `tests/api/` | Los endpoints de principio a fin, con `client` | Sí |
+
+Los nombres de fichero deben ser únicos en todo `tests/`, porque las carpetas no llevan `__init__.py`.
+
 ## Decisiones de diseño
 
 | Decisión | Elección | Motivo |
@@ -147,6 +258,7 @@ Los tests de las migraciones comprueban que el esquema y la tabla de versiones s
 ## Limitaciones conocidas
 
 - Solo `document-service` usa la base de datos por ahora. `traceability-service` y `submission-service` aplicarán el mismo patrón con sus historias.
-- La primera migración (`0001`) está vacía: marca el punto de partida del historial. Las tablas llegan con las historias de usuario.
+- La primera migración (`0001`) está vacía: marca el punto de partida del historial. Las tablas llegan con las historias de usuario: `0002` crea las de los documentos (CU-1).
+- Un número solo se devuelve con un *rollback*. Si se anula un documento ya guardado, su número no se reutiliza, que es lo esperado en una numeración fiscal. Lo trata CU-6.
 - Las migraciones se aplican en cada arranque y no hay una marcha atrás automática. Una migración que falla a la mitad deja el contenedor reiniciándose hasta que se corrige.
 - `GET /health` falla cuando la base de datos no responde. Separar la comprobación de que el proceso está vivo de la de que está listo para atender se aborda en el hito de observabilidad.

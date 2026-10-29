@@ -63,6 +63,16 @@ def session(engine: Engine) -> Iterator[Session]:
 
 
 @pytest.fixture
+def offline_client() -> Iterator[TestClient]:
+    """Test client with no database, for requests that are rejected before using it."""
+    # The endpoint still asks for a session, so hand it a placeholder. If a test reaches the
+    # database by mistake, it fails with an error instead of connecting somewhere.
+    app.dependency_overrides[get_session] = lambda: object()
+    yield TestClient(app)
+    app.dependency_overrides.clear()
+
+
+@pytest.fixture
 def client(session: Session) -> Iterator[TestClient]:
     """FastAPI test client that calls the app in-process, without starting a server."""
     # Whenever an endpoint asks for Depends(get_session), hand it the test session. The

@@ -1,4 +1,12 @@
-"""ORM models of the service.
+"""Models of the service. Import every model module here so Alembic autogenerate sees it."""
 
-Import every model module here so Alembic autogenerate can see its tables.
-"""
+from app.models.counter import DocumentCounter
+from app.models.document import Document, DocumentLine, DocumentStatus, DocumentType
+
+__all__ = [
+    "Document",
+    "DocumentCounter",
+    "DocumentLine",
+    "DocumentStatus",
+    "DocumentType",
+]

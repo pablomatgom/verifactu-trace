@@ -1,3 +1,6 @@
+import logging
+
+import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.exc import OperationalError
 
@@ -36,3 +39,15 @@ def test_health_returns_503_when_the_database_is_down():
         "service": "document-service",
         "detail": "database",
     }
+
+
+def test_health_logs_why_the_database_check_failed(caplog: pytest.LogCaptureFixture):
+    app.dependency_overrides[get_session] = lambda: DownSession()
+    try:
+        with caplog.at_level(logging.WARNING):
+            TestClient(app).get("/health")
+    finally:
+        app.dependency_overrides.clear()
+
+    assert "Database health check failed" in caplog.text
+    assert "connection refused" in caplog.text  # the cause is in the log, not in the response

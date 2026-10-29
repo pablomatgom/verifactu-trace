@@ -79,10 +79,23 @@ Si `document-service` crece y acumula mucha lógica de pedidos, albaranes y fact
 1. **Cada capa solo habla con la siguiente.** `api` llama a `services`, y `services` llama a `repositories`. Un endpoint que lee la base de datos directamente se salta la arquitectura, y deja las capas en simples carpetas con nombre.
 2. **Las dependencias van hacia abajo.** Un repositorio no importa un servicio, y un servicio no importa un router.
 3. **La sesión de base de datos se inyecta.** `api` la recibe con `Depends(get_session)` y la pasa hacia abajo. Así los tests pueden sustituirla (ver `client` y `session` en [`database.md`](database.md)).
-4. **Las excepciones de negocio se traducen en `api`.** Un servicio lanza una excepción propia (por ejemplo, un pedido sin líneas) y la capa `api` la convierte en el código HTTP, como un `422`. El servicio no conoce los códigos de estado.
+4. **Las excepciones de negocio se traducen en `api`.** Un servicio lanza una excepción propia (por ejemplo, un albarán que referencia a un pedido inexistente) y la capa `api` la convierte en el código HTTP, como un `404`. El servicio no conoce los códigos de estado.
+5. **Los servicios no importan los esquemas de la API.** `api` traduce los modelos de Pydantic a datos propios del servicio (en CU-1, `OrderData` y `OrderLineData`, que son `dataclass`). Así el servicio sigue sin conocer el formato de la petición, y se prueba con objetos simples.
+6. **El servicio confirma la transacción.** El repositorio solo hace `flush`, y el servicio llama a `commit` al terminar el caso de uso, de modo que el número, el pedido y sus líneas se guardan juntos o no se guarda nada.
+7. **La respuesta se construye dentro del endpoint**, mientras la sesión sigue abierta. Si se devolviera el objeto de SQLAlchemy y se serializara después, leer las líneas podría necesitar la base de datos cuando la sesión ya se cerró.
+
+### Errores de validación
+
+Los datos que no cumplen el esquema de Pydantic (sin líneas, cantidad negativa, campos que faltan) los rechaza FastAPI antes de llegar al servicio, con un `422`. [`api/errors.py`](../services/document-service/app/api/errors.py) convierte la respuesta al cuerpo común del contrato de la API, `{"error": {"code": "VALIDATION_ERROR", "message": "..."}}`, con un mensaje que indica el campo: `lines.0.quantity: Input should be greater than 0`. Cuando el fallo es del cuerpo entero (JSON mal formado o ausente), el campo es `body`. Una petición rechazada no consume número de la serie.
+
+Los esquemas de entrada heredan de `RequestModel` ([`schemas/common.py`](../services/document-service/app/api/schemas/common.py)), que **prohíbe los campos desconocidos**. Si un cliente envía un campo que calcula el servidor, como `total`, recibe un `422` en lugar de creer que su valor se usó.
+
+### Errores en la documentación de la API
+
+FastAPI documenta por defecto el `422` con su propio formato (`{"detail": [...]}`), que no es el que devuelve este servicio. Cada endpoint que valida datos declara `responses=VALIDATION_ERROR_RESPONSE` ([`schemas/common.py`](../services/document-service/app/api/schemas/common.py)), y así `/docs` y `/openapi.json` describen el `422` con el cuerpo común, con un ejemplo. Un test (`tests/api/test_openapi.py`) comprueba que se documenta el nuestro y no el de FastAPI. Los endpoints nuevos de CU-2 y CU-3 deben declararlo también.
 
 ## Limitaciones conocidas
 
-- Solo `document-service` tiene las capas con la estructura creada. `traceability-service` y `submission-service` la aplicarán cuando tengan lógica.
-- Las capas `services` y `repositories` están vacías hasta que lleguen las historias de usuario (CU-1 en adelante).
+- Solo `document-service` tiene las capas con la estructura creada, y de momento solo para los pedidos (CU-1). `traceability-service` y `submission-service` la aplicarán cuando tengan lógica.
+- Todavía no hay excepciones de negocio: CU-1 solo tiene errores de validación. El módulo `exceptions.py` se añadirá con CU-2, que necesita `REFERENCE_NOT_FOUND`.
 - La regla de que cada capa solo habla con la siguiente la garantiza la revisión de código, no una herramienta. Se podría automatizar con una herramienta como `import-linter`.
