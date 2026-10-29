@@ -37,7 +37,7 @@ El trabajo `test` define `DATABASE_URL` y levanta un contenedor `postgres:17-alp
 
 ### Qué hacen los tests
 
-Cada servicio tiene sus pruebas en `tests/` y las ejecuta `pytest`. De momento solo comprueban `GET /health`, y crecerán con cada historia de usuario. Usan el cliente de pruebas de FastAPI (`TestClient`), que llama a la aplicación sin levantar un servidor.
+Cada servicio tiene sus pruebas en `tests/` y las ejecuta `pytest`. `traceability-service` y `submission-service` solo comprueban `GET /health` por ahora. Los de `document-service` cubren además las migraciones, el contador de numeración, el cálculo de importes y `POST /api/v1/orders` (ver [`database.md`](database.md)), y crecerán con cada historia de usuario. Usan el cliente de pruebas de FastAPI (`TestClient`), que llama a la aplicación sin levantar un servidor.
 
 `pytest` se lanza **por servicio**, desde su carpeta, y no una sola vez desde la raíz. Los tres servicios tienen un paquete llamado `app`, y al ejecutarlos juntos Python solo importaría uno de ellos. La carpeta de cada servicio se añade al `pythonpath` mediante su `pyproject.toml`.
 

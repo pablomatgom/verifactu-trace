@@ -210,6 +210,44 @@ Esta sección define el contrato de la API que expone `verifactu-trace` a travé
 | `GET` | `/api/v1/documents/{id}/discrepancies` | Detecta diferencias entre pedido, albarán y factura | CU-7 (extra) | `200`, `404` |
 | `POST` | `/api/v1/invoices/{id}/corrections` | Emite una factura rectificativa | CU-8 (extra) | `201`, `404`, `422` |
 
+#### `POST /api/v1/orders` (CU-1)
+
+Registra un pedido. El servidor asigna el `id` (UUID), el número de la serie `P` (`P-<año>-<correlativo de seis cifras>`), la fecha y los importes, y **no se aceptan en la petición**: un campo desconocido se rechaza con `422` en lugar de ignorarse. `vat_rate` es opcional y vale `21` por defecto.
+
+```json
+{
+  "customer": { "name": "Acme S.L.", "tax_id": "B12345678" },
+  "lines": [
+    { "description": "Widget", "quantity": 2, "unit_price": 10.5, "vat_rate": 21 }
+  ]
+}
+```
+
+Respuesta `201`:
+
+```json
+{
+  "id": "62c13d37-67f6-42d1-918e-641e43072aa4",
+  "type": "ORDER",
+  "number": "P-2026-000001",
+  "status": "ISSUED",
+  "issue_date": "2026-10-28",
+  "customer": { "name": "Acme S.L.", "tax_id": "B12345678" },
+  "lines": [
+    { "position": 1, "description": "Widget", "quantity": 2.0, "unit_price": 10.5, "vat_rate": 21.0 }
+  ],
+  "total_net": 21.0,
+  "total_vat": 4.41,
+  "total": 25.41
+}
+```
+
+Se responde `422` si el pedido no tiene líneas, si una cantidad no es mayor que cero, si un precio es negativo o tiene más de dos decimales, si el IVA no está entre 0 y 100, si falta un campo obligatorio, si se envía un campo desconocido (como `total`) o si el cuerpo no es un JSON válido. El mensaje indica el campo, o `body` cuando el fallo es del cuerpo entero:
+
+```json
+{ "error": { "code": "VALIDATION_ERROR", "message": "lines.0.quantity: Input should be greater than 0" } }
+```
+
 ### traceability-service
 
 | Método | Ruta | Descripción | CU | Respuestas |
