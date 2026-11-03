@@ -298,6 +298,60 @@ Los errores usan el cuerpo común `{"error": {"code": "...", "message": "..."}}`
 
 Dos albaranes simultáneos del mismo pedido no pueden superar entre los dos lo pedido: el servidor bloquea el pedido mientras comprueba las cantidades y guarda el albarán.
 
+#### `POST /api/v1/invoices` (CU-3)
+
+Emite la factura de un albarán. Solo se envía el albarán: la factura **factura lo que el albarán entregó**, con el cliente y los precios del pedido. El servidor asigna el `id`, el número de la serie `F` (`F-<año>-<correlativo de seis cifras>`, sin huecos), la fecha y los importes: ninguno se acepta en la petición, y un campo desconocido se rechaza con `422`.
+
+Un albarán solo se puede facturar una vez.
+
+```json
+{ "delivery_note_id": "0b6c3d8e-5f0a-4c53-8d5e-9a1d6f2d7c11" }
+```
+
+Respuesta `201`:
+
+```json
+{
+  "id": "5d2e8a6c-1f40-4b9a-9c77-3e0a6b4d1f52",
+  "type": "INVOICE",
+  "number": "F-2026-000001",
+  "status": "ISSUED",
+  "issue_date": "2026-11-03",
+  "delivery_note_id": "0b6c3d8e-5f0a-4c53-8d5e-9a1d6f2d7c11",
+  "order_id": "62c13d37-67f6-42d1-918e-641e43072aa4",
+  "customer": { "name": "Acme S.L.", "tax_id": "B12345678" },
+  "lines": [
+    { "position": 1, "delivery_note_line": 1, "description": "Widget", "quantity": 2.0, "unit_price": 10.5, "vat_rate": 21.0 }
+  ],
+  "total_net": 21.0,
+  "total_vat": 4.41,
+  "total": 25.41
+}
+```
+
+`total_net` es la base imponible, `total_vat` la cuota de IVA y `total` la suma de ambas. La cadena queda enlazada: la factura apunta a su albarán (`delivery_note_id`) y cada línea a la línea del albarán que factura (`delivery_note_line`).
+
+| Respuesta | Código | Cuándo |
+|---|---|---|
+| `404` | `REFERENCE_NOT_FOUND` | El albarán no existe, o el identificador es de un documento que no es un albarán |
+| `422` | `DELIVERY_NOTE_ALREADY_INVOICED` | El albarán ya tiene factura |
+| `422` | `VALIDATION_ERROR` | Cuerpo mal formado: falta `delivery_note_id`, no es un UUID o hay un campo desconocido |
+
+Dos peticiones simultáneas para el mismo albarán no pueden emitir dos facturas: el servidor bloquea el albarán mientras comprueba y guarda, y la base de datos lo impide además con un índice único.
+
+**Evento `invoice.issued`.** Cuando la factura queda guardada, el servicio publica el evento en el *stream* de Redis `invoice.issued`, del que leerán `traceability-service` y `submission-service`. Cada entrada lleva estos campos, todos texto:
+
+| Campo | Contenido |
+|---|---|
+| `invoice_id` | Identificador de la factura |
+| `number` | Número de la factura, como `F-2026-000001` |
+| `delivery_note_id` | Identificador del albarán facturado |
+| `order_id` | Identificador del pedido de origen |
+| `total` | Total de la factura, como `25.41` |
+| `issued_at` | Fecha y hora de emisión, en ISO 8601 con zona horaria |
+
+El evento se publica **después de guardar** la factura. Si Redis no responde, la factura se emite igual (`201`) y el fallo queda en el log, porque un servicio que reacciona a las facturas no debe impedir emitirlas. Eso significa que el evento se puede perder; ver las limitaciones en [`docs/arquitectura.md`](docs/arquitectura.md).
+
 ### traceability-service
 
 | Método | Ruta | Descripción | CU | Respuestas |
@@ -319,36 +373,6 @@ Dos albaranes simultáneos del mismo pedido no pueden superar entre los dos lo p
 Normalmente el envío se dispara solo al recibir el evento `invoice.issued`. `POST /api/v1/submissions` permite lanzarlo manualmente.
 
 ### Ejemplos
-
-**Emitir una factura** (`POST /api/v1/invoices`):
-
-```json
-{
-  "deliveryNoteId": "9a7b2d1e-4c3f-4e6a-8b0d-2f5c1a7e9d34",
-  "series": "A",
-  "customer": { "taxId": "B12345678", "name": "Suministros Granada S.L." },
-  "lines": [
-    { "description": "Servicio de mantenimiento", "quantity": 2, "unitPrice": 150.00, "taxRate": 21 }
-  ]
-}
-```
-
-Respuesta `201 Created`:
-
-```json
-{
-  "id": "5d2e8a6c-1f40-4b9a-9c77-3e0a6b4d1f52",
-  "type": "INVOICE",
-  "series": "A",
-  "number": "A-2026-000001",
-  "deliveryNoteId": "9a7b2d1e-4c3f-4e6a-8b0d-2f5c1a7e9d34",
-  "taxableBase": 300.00,
-  "taxAmount": 63.00,
-  "total": 363.00,
-  "status": "ISSUED",
-  "issuedAt": "2026-10-14T09:30:00Z"
-}
-```
 
 **Consultar la cadena documental** (`GET /api/v1/traceability/documents/{id}/chain`):
 

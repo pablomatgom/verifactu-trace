@@ -1,6 +1,6 @@
 import pytest
 
-from app.config import database_url
+from app.config import database_url, redis_url
 
 # These tests need no database: they only check how the URL is built from the environment.
 # `monkeypatch` sets or removes an environment variable for the duration of one test and
@@ -29,3 +29,16 @@ def test_database_url_is_required(monkeypatch):
 
     with pytest.raises(RuntimeError, match="DATABASE_URL"):
         database_url()
+
+
+def test_redis_url_is_read_from_the_environment(monkeypatch):
+    monkeypatch.setenv("REDIS_URL", "redis://redis:6379/0")
+
+    assert redis_url() == "redis://redis:6379/0"
+
+
+def test_redis_url_is_required(monkeypatch):
+    monkeypatch.delenv("REDIS_URL", raising=False)
+
+    with pytest.raises(RuntimeError, match="REDIS_URL"):
+        redis_url()

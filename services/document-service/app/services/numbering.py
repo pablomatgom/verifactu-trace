@@ -4,6 +4,7 @@ from app.models import DocumentType
 SERIES = {
     DocumentType.ORDER: "P",
     DocumentType.DELIVERY_NOTE: "A",
+    DocumentType.INVOICE: "F",
 }
 
 

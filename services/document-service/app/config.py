@@ -18,3 +18,11 @@ def database_url() -> str:
     except KeyError:
         raise RuntimeError("The DATABASE_URL environment variable is not set") from None
     return url.replace("postgresql://", "postgresql+psycopg://", 1)
+
+
+def redis_url() -> str:
+    """Connection URL of the Redis where the events are published."""
+    try:
+        return os.environ["REDIS_URL"]
+    except KeyError:
+        raise RuntimeError("The REDIS_URL environment variable is not set") from None

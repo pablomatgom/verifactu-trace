@@ -40,7 +40,7 @@ jobs:
       fail-fast: false
       matrix:
         service: [document-service, traceability-service, submission-service]
-    # Throwaway database for the integration tests of the services that use PostgreSQL.
+    # Throwaway PostgreSQL and Redis for the integration tests of the services that use them.
     services:
       postgres:
         image: postgres:17-alpine
@@ -55,8 +55,18 @@ jobs:
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     env:
       DATABASE_URL: postgresql://verifactu:test-only@localhost:5432/verifactu
+      REDIS_URL: redis://localhost:6379/0
     defaults:
       run:
         working-directory: services/${{ matrix.service }}

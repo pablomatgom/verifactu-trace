@@ -80,7 +80,7 @@ Si `document-service` crece y acumula mucha lógica de pedidos, albaranes y fact
 2. **Las dependencias van hacia abajo.** Un repositorio no importa un servicio, y un servicio no importa un router.
 3. **La sesión de base de datos se inyecta.** `api` la recibe con `Depends(get_session)` y la pasa hacia abajo. Así los tests pueden sustituirla (ver `client` y `session` en [`database.md`](database.md)).
 4. **Las excepciones de negocio se traducen en `api`.** Un servicio lanza una excepción propia de [`exceptions.py`](../services/document-service/app/exceptions.py) (por ejemplo, `ReferenceNotFound` si un albarán referencia a un pedido inexistente) y la capa `api` la convierte en el código HTTP, como un `404`. El servicio no conoce los códigos de estado.
-5. **Los servicios no importan los esquemas de la API.** `api` traduce los modelos de Pydantic a datos propios del servicio (`OrderData`, `DeliveryNoteData` y `LineData`, que son `dataclass`). Así el servicio sigue sin conocer el formato de la petición, y se prueba con objetos simples.
+5. **Los servicios no importan los esquemas de la API.** `api` traduce los modelos de Pydantic a datos propios del servicio (`OrderData`, `DeliveryNoteData`, `InvoiceData` y `LineData`, que son `dataclass`). Así el servicio sigue sin conocer el formato de la petición, y se prueba con objetos simples.
 6. **El servicio confirma la transacción.** El repositorio solo hace `flush`, y el servicio llama a `commit` al terminar el caso de uso, de modo que el número, el pedido y sus líneas se guardan juntos o no se guarda nada.
 7. **La respuesta se construye dentro del endpoint**, mientras la sesión sigue abierta. Si se devolviera el objeto de SQLAlchemy y se serializara después, leer las líneas podría necesitar la base de datos cuando la sesión ya se cerró.
 
@@ -99,15 +99,28 @@ Una petición con el formato correcto que rompe una regla (un pedido que no exis
 | `ReferenceNotFound` | `REFERENCE_NOT_FOUND` | `404` |
 | `InvalidOrderLine` | `INVALID_ORDER_LINE` | `422` |
 | `QuantityExceeded` | `QUANTITY_EXCEEDED` | `422` |
+| `DeliveryNoteAlreadyInvoiced` | `DELIVERY_NOTE_ALREADY_INVOICED` | `422` |
 
 Un solo manejador (`domain_error_handler`) sirve para todas: responde `404` para `ReferenceNotFound` y `422` para el resto. Una excepción nueva solo necesita su `code` y heredar de `DomainError`. Como el servicio lanza la excepción antes de guardar nada, la petición rechazada no consume número de la serie.
 
+### Eventos
+
+Cuando una factura se emite, el servicio lo anuncia al resto del sistema con el evento `invoice.issued`, publicado en un *stream* de Redis. Se organiza como el acceso a la base de datos:
+
+- [`app/events.py`](../services/document-service/app/events.py) es la pieza que habla con Redis, igual que `db.py` con PostgreSQL. Define `EventPublisher` (lo que el servicio necesita: publicar un evento en un *stream*) y `RedisEventPublisher` (su implementación con `XADD`).
+- El endpoint recibe el publicador con `Depends(get_publisher)` y se lo pasa al servicio, como la sesión de base de datos. El servicio no importa `redis`: depende de `EventPublisher`. Si Redis falla, `RedisEventPublisher` lanza `EventPublishError`, una excepción propia, y el servicio no ve las de Redis.
+- Los tests sustituyen `get_publisher` por uno falso que apunta los eventos en una lista, así que ningún test necesita Redis salvo los pocos que lo prueban a propósito (ver [`database.md`](database.md)).
+
+**Se publica después del `commit`**, no antes: si se publicara antes y la transacción fallara, otros servicios recibirían una factura que no existe. Y si Redis no responde, **la factura se emite igual**: el error se registra en el log (`Event invoice.issued of invoice F-... was not published`) y la respuesta es `201`. Un fallo de quien reacciona a las facturas no debe impedir emitirlas. Redis se conecta con un tiempo máximo de 2 segundos para que no deje la petición esperando.
+
 ### Errores en la documentación de la API
 
-FastAPI documenta por defecto el `422` con su propio formato (`{"detail": [...]}`), que no es el que devuelve este servicio. Cada endpoint declara sus errores en `responses` con `error_response("descripción")`, para cualquier código ([`schemas/common.py`](../services/document-service/app/api/schemas/common.py)): `responses={422: error_response("...")}`. Así `/docs` y `/openapi.json` describen cada error con el cuerpo común, con un ejemplo. Un test (`tests/api/test_openapi.py`) comprueba que se documenta el nuestro y no el de FastAPI. Los endpoints nuevos de CU-3 deben declararlos también.
+FastAPI documenta por defecto el `422` con su propio formato (`{"detail": [...]}`), que no es el que devuelve este servicio. Cada endpoint declara sus errores en `responses` con `error_response("descripción")`, para cualquier código ([`schemas/common.py`](../services/document-service/app/api/schemas/common.py)): `responses={422: error_response("...")}`. Así `/docs` y `/openapi.json` describen cada error con el cuerpo común, con un ejemplo. Un test (`tests/api/test_openapi.py`) comprueba que se documenta el nuestro y no el de FastAPI. Los endpoints nuevos deben declararlos también.
 
 ## Limitaciones conocidas
 
-- Solo `document-service` tiene las capas con la estructura creada, y de momento solo para los pedidos y los albaranes (CU-1 y CU-2). `traceability-service` y `submission-service` la aplicarán cuando tengan lógica.
+- Solo `document-service` tiene las capas con la estructura creada, y de momento solo para los pedidos, los albaranes y las facturas (CU-1 a CU-3). `traceability-service` y `submission-service` la aplicarán cuando tengan lógica.
 - Los mensajes de los errores están en inglés y no se traducen.
+- **El evento `invoice.issued` se puede perder.** Se guarda la factura y después se publica el evento: son dos operaciones en sistemas distintos y no pueden ser atómicas. Si el proceso cae o Redis falla entre las dos, la factura existe y los demás servicios no se enteran. La solución habitual es un *outbox transaccional*: guardar el evento en una tabla dentro de la misma transacción que la factura y que otro proceso lo publique. No está hecho en este hito. Mientras tanto, el fallo se registra en el log y se puede detectar.
+- Hay un solo *stream* sin recorte (`XTRIM`): crece mientras nadie lo consuma. Los consumidores y la política de retención llegan con `traceability-service` y `submission-service`.
 - La regla de que cada capa solo habla con la siguiente la garantiza la revisión de código, no una herramienta. Se podría automatizar con una herramienta como `import-linter`.
