@@ -21,6 +21,7 @@ class DocumentType(StrEnum):
     """Kind of document of the chain order -> delivery note -> invoice."""
 
     ORDER = "ORDER"
+    DELIVERY_NOTE = "DELIVERY_NOTE"
 
 
 class DocumentStatus(StrEnum):
@@ -75,7 +76,14 @@ class DocumentLine(Base):
     unit_price: Mapped[Decimal] = mapped_column(Numeric(12, 2))
     vat_rate: Mapped[Decimal] = mapped_column(Numeric(5, 2))
 
+    # The line of the previous document this one comes from: a delivery note line points to the
+    # order line it delivers. It is what lets us add up how much of each order line was delivered.
+    source_line_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("document_lines.id", name="fk_document_lines_source_line_id"), default=None
+    )
+
     document: Mapped[Document] = relationship(back_populates="lines")
+    source_line: Mapped["DocumentLine | None"] = relationship(remote_side=[id])
 
     # The API validates these values too; the database is the last line of defence.
     __table_args__ = (
@@ -83,4 +91,5 @@ class DocumentLine(Base):
         CheckConstraint("unit_price >= 0", name="ck_document_lines_unit_price_not_negative"),
         CheckConstraint("vat_rate >= 0 AND vat_rate <= 100", name="ck_document_lines_vat_rate"),
         Index("ix_document_lines_document_id", "document_id"),
+        Index("ix_document_lines_source_line_id", "source_line_id"),
     )

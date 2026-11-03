@@ -3,12 +3,13 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, status
 from sqlalchemy.orm import Session
 
-from app.api.schemas.common import VALIDATION_ERROR_RESPONSE
+from app.api.schemas.common import error_response
 from app.api.schemas.orders import CustomerOut, OrderCreate, OrderLineOut, OrderRead
 from app.db import get_session
 from app.models import Document
 from app.services import order_service
-from app.services.order_service import OrderData, OrderLineData
+from app.services.order_service import OrderData
+from app.services.pricing import LineData
 
 router = APIRouter(prefix="/api/v1/orders", tags=["orders"])
 
@@ -33,7 +34,9 @@ def _to_read(order: Document) -> OrderRead:
     status_code=status.HTTP_201_CREATED,
     summary="Register an order",
     response_description="The order, with its id, its number and the calculated amounts.",
-    responses=VALIDATION_ERROR_RESPONSE,
+    responses={
+        422: error_response("The request body is not valid: the message names each failing field.")
+    },
 )
 def create_order(body: OrderCreate, session: Annotated[Session, Depends(get_session)]) -> OrderRead:
     """Register an order with its customer and lines.
@@ -47,7 +50,7 @@ def create_order(body: OrderCreate, session: Annotated[Session, Depends(get_sess
         customer_name=body.customer.name,
         customer_tax_id=body.customer.tax_id,
         lines=[
-            OrderLineData(
+            LineData(
                 description=line.description,
                 quantity=line.quantity,
                 unit_price=line.unit_price,
