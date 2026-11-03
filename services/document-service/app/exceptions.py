@@ -24,6 +24,12 @@ class InvalidOrderLine(DomainError):
     code = "INVALID_ORDER_LINE"
 
 
+class DeliveryNoteAlreadyInvoiced(DomainError):
+    """The delivery note already has an invoice, and it can only be invoiced once."""
+
+    code = "DELIVERY_NOTE_ALREADY_INVOICED"
+
+
 class QuantityExceeded(DomainError):
     """The delivered quantity of an order line would be greater than the ordered one."""
 

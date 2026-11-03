@@ -3,7 +3,9 @@ from datetime import date, datetime
 from decimal import Decimal
 from enum import StrEnum
 
-from sqlalchemy import CheckConstraint, Date, DateTime, ForeignKey, Index, Numeric, String, func
+from sqlalchemy import (CheckConstraint, Date, DateTime, ForeignKey,
+                        Index, Numeric, String, func, text,)
+
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db import Base
@@ -22,6 +24,7 @@ class DocumentType(StrEnum):
 
     ORDER = "ORDER"
     DELIVERY_NOTE = "DELIVERY_NOTE"
+    INVOICE = "INVOICE"
 
 
 class DocumentStatus(StrEnum):
@@ -52,6 +55,8 @@ class Document(Base):
     parent_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("documents.id"), default=None)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
+    # The previous document itself, to go up the chain (invoice -> delivery note -> order).
+    parent: Mapped["Document | None"] = relationship(remote_side=[id])
     lines: Mapped[list["DocumentLine"]] = relationship(
         back_populates="document",
         cascade="all, delete-orphan",
@@ -61,6 +66,14 @@ class Document(Base):
     __table_args__ = (
         Index("ix_documents_type", "type"),
         Index("ix_documents_customer_tax_id", "customer_tax_id"),
+        # A delivery note is invoiced once. The service checks it, and this is the last defence:
+        # even if two requests got past the check, the database would reject the second invoice.
+        Index(
+            "uq_documents_one_invoice_per_delivery_note",
+            "parent_id",
+            unique=True,
+            postgresql_where=text("type = 'INVOICE'"),
+        ),
     )
 
 

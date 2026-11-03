@@ -33,7 +33,7 @@ def _plain(quantity: Decimal) -> str:
 def create_delivery_note(session: Session, data: DeliveryNoteData) -> Document:
     """Register a delivery note of an order: check it, number it and save it in one transaction."""
     # Locking the order makes the check and the insert one step for concurrent requests.
-    order = document_repository.get_order_for_update(session, data.order_id)
+    order = document_repository.get_for_update(session, data.order_id, DocumentType.ORDER)
     if order is None:
         raise ReferenceNotFound(f"order {data.order_id} does not exist")
 

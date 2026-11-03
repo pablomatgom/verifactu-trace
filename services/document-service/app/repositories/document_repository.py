@@ -18,19 +18,32 @@ def add(session: Session, document: Document) -> Document:
     return document
 
 
-def get_order_for_update(session: Session, order_id: uuid.UUID) -> Document | None:
-    """Return the order with that id, locking its row until the end of the transaction.
+def get_for_update(
+    session: Session, document_id: uuid.UUID, document_type: DocumentType
+) -> Document | None:
+    """Return the document with that id and type, locking its row until the end of the transaction.
 
-    The lock makes two requests that deliver the same order wait for each other, so the second
-    one sees what the first delivered. Without it both could pass the check and, together, deliver
-    more than was ordered. Returns None if there is no document with that id, or it is not an order.
+    The lock makes two requests that work on the same document wait for each other, so the second
+    one sees what the first did. Without it both could pass a check (such as "is there still
+    something to deliver?") and break the rule together. Returns None if there is no document
+    with that id, or it is not of that type.
     """
     query = (
         select(Document)
-        .where(Document.id == order_id, Document.type == DocumentType.ORDER)
+        .where(Document.id == document_id, Document.type == document_type)
         .with_for_update()
     )
     return session.scalar(query)
+
+
+def exists_child(session: Session, parent_id: uuid.UUID, document_type: DocumentType) -> bool:
+    """Say whether a document of that type already points to the given parent."""
+    query = select(
+        select(Document.id)
+        .where(Document.parent_id == parent_id, Document.type == document_type)
+        .exists()
+    )
+    return bool(session.scalar(query))
 
 
 def delivered_quantities(session: Session, order_id: uuid.UUID) -> dict[uuid.UUID, Decimal]:
