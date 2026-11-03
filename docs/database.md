@@ -17,6 +17,7 @@ services/document-service/
 │   ├── repositories/        # capa de datos: consultas contra el esquema
 │   ├── models/              # modelos de SQLAlchemy
 │   ├── config.py            # variables de entorno
+│   ├── exceptions.py        # errores de negocio que lanzan los servicios
 │   ├── db.py                # motor, sesión y base declarativa
 │   └── main.py
 └── tests/
@@ -49,11 +50,12 @@ Compose pasa `DATABASE_URL` con el formato `postgresql://...`. SQLAlchemy lo aso
 
 ## Modelo de datos
 
-Pedidos, albaranes y facturas comparten una sola tabla, porque el contrato de la API los trata como un único recurso (`/documents`). Cada documento apunta al anterior de la cadena mediante `parent_id`. Hoy solo se crean pedidos (CU-1).
+Pedidos, albaranes y facturas comparten una sola tabla, porque el contrato de la API los trata como un único recurso (`/documents`). Cada documento apunta al anterior de la cadena mediante `parent_id`. Hoy se crean pedidos (CU-1) y albaranes (CU-2).
 
 ```mermaid
 erDiagram
     documents ||--o{ document_lines : "líneas (se borran con él)"
+    document_lines |o--o{ document_lines : "source_line_id: línea de origen"
     documents |o--o{ documents : "parent_id: documento anterior"
 
     documents {
@@ -72,6 +74,7 @@ erDiagram
     document_lines {
         uuid id PK
         uuid document_id FK
+        uuid source_line_id FK "línea de origen"
         int position "desde 1"
         varchar description
         numeric quantity "3 decimales"
@@ -85,7 +88,7 @@ erDiagram
     }
 ```
 
-La cadena de documentos se forma con `parent_id`: el albarán (CU-2) apuntará a su pedido y la factura (CU-3) a su albarán. `document_counters` queda suelta porque no tiene clave foránea: `documents.number` se construye con su valor, pero la base de datos no lo comprueba. El diagrama muestra las columnas clave, y las tablas de abajo las detallan todas.
+La cadena de documentos se forma con `parent_id`: el albarán (CU-2) apunta a su pedido y la factura (CU-3) apuntará a su albarán. Lo mismo ocurre con las líneas: cada línea de un albarán apunta con `source_line_id` a la línea del pedido que entrega, y con eso se suma cuánto se ha entregado de cada una. `document_counters` queda suelta porque no tiene clave foránea: `documents.number` se construye con su valor, pero la base de datos no lo comprueba. El diagrama muestra las columnas clave, y las tablas de abajo las detallan todas.
 
 ### Tablas
 
@@ -94,15 +97,15 @@ La cadena de documentos se forma con `parent_id`: el albarán (CU-2) apuntará a
 | Columna | Tipo | Notas |
 |---|---|---|
 | `id` | `UUID` | Clave primaria, la asigna el servidor |
-| `type` | `VARCHAR(20)` | `ORDER` por ahora. Indexada |
-| `series` | `VARCHAR(10)` | `P` para los pedidos |
-| `number` | `VARCHAR(40)` | **Único**, como `P-2026-000001` |
+| `type` | `VARCHAR(20)` | `ORDER` o `DELIVERY_NOTE`. Indexada |
+| `series` | `VARCHAR(10)` | `P` para los pedidos y `A` para los albaranes |
+| `number` | `VARCHAR(40)` | **Único**, como `P-2026-000001` o `A-2026-000001` |
 | `status` | `VARCHAR(20)` | `ISSUED` por ahora |
 | `issue_date` | `DATE` | La pone el servidor con la fecha de hoy |
 | `customer_name` | `VARCHAR(200)` | Nombre del cliente |
 | `customer_tax_id` | `VARCHAR(20)` | NIF/CIF del cliente. Indexada |
 | `total_net`, `total_vat`, `total` | `NUMERIC(12,2)` | Los calcula el servidor |
-| `parent_id` | `UUID` | Clave foránea a `documents.id`: el documento anterior de la cadena. Vacío en un pedido |
+| `parent_id` | `UUID` | Clave foránea a `documents.id`: el documento anterior de la cadena (el pedido, en un albarán). Vacío en un pedido |
 | `created_at` | `TIMESTAMPTZ` | Valor por defecto `now()` en la base de datos |
 
 **`document_lines`**: las líneas de un documento. Se borran con él (`ON DELETE CASCADE`).
@@ -111,6 +114,7 @@ La cadena de documentos se forma con `parent_id`: el albarán (CU-2) apuntará a
 |---|---|---|
 | `id` | `UUID` | Clave primaria |
 | `document_id` | `UUID` | Clave foránea a `documents.id`. Indexada |
+| `source_line_id` | `UUID` | Clave foránea a `document_lines.id`: la línea del documento anterior que esta línea entrega. Vacía en un pedido. Indexada |
 | `position` | `INTEGER` | Orden de la línea, desde 1 |
 | `description` | `VARCHAR(300)` | |
 | `quantity` | `NUMERIC(12,3)` | Mayor que cero, hasta 3 decimales |
@@ -124,7 +128,7 @@ La cadena de documentos se forma con `parent_id`: el albarán (CU-2) apuntará a
 | Tema | Decisión | Por qué |
 |---|---|---|
 | Tipos y estados | `DocumentType` y `DocumentStatus` son `StrEnum` de Python (`models/document.py`) y se guardan como texto, no como `ENUM` nativo | Añadir un valor a un `ENUM` de PostgreSQL exige una migración con `ALTER TYPE`. Con texto basta un miembro nuevo en la enumeración |
-| Series | `P` para los pedidos, definida en `services/numbering.py` junto al formato del número | Un solo sitio para saber cómo se numera cada tipo |
+| Series | `P` para los pedidos y `A` para los albaranes, definidas en `services/numbering.py` junto al formato del número | Un solo sitio para saber cómo se numera cada tipo |
 | Importes | `NUMERIC` en la base de datos y `Decimal` en Python, nunca `float`. En el JSON viajan como números | Evita errores de redondeo binario |
 | Cálculo | Lo hace el servidor y la petición no puede enviarlo. Cada línea se redondea a céntimos (mitad hacia arriba) y el IVA se redondea **por línea** | Los totales cuadran con las líneas, como en una factura |
 | Restricciones | La base de datos repite las reglas de la API (cantidad > 0, precio ≥ 0, IVA entre 0 y 100) | Última defensa si algo salta la validación de la API |
@@ -144,6 +148,16 @@ RETURNING last_number
 2. El número y el documento se guardan en la **misma transacción**. Si la creación del documento falla, el *rollback* devuelve el número y no quedan huecos.
 
 El coste es que las peticiones de una misma serie y año se ponen en cola mientras dura la transacción. Para registrar pedidos es asumible.
+
+### Cantidades entregadas
+
+Un pedido puede entregarse en varios albaranes, y la suma de lo entregado de cada línea no puede superar lo pedido. No se guarda ningún total: se calcula al registrar el albarán, sumando las líneas de los albaranes anteriores que apuntan a esa línea del pedido con `source_line_id`.
+
+1. El servicio **bloquea la fila del pedido** (`SELECT ... FOR UPDATE`) antes de comprobar las cantidades.
+2. Si dos albaranes del mismo pedido llegan a la vez, el segundo espera a que el primero termine, y entonces ve lo que este entregó.
+3. Sin el bloqueo, los dos pasarían la comprobación y, entre los dos, entregarían más de lo pedido.
+
+Un test (`tests/services/test_delivery_note_concurrency.py`) fuerza ese solapamiento y falla si se quita el bloqueo. Los albaranes de pedidos distintos no se bloquean entre sí.
 
 El esquema (`documents`) está escrito en las migraciones, porque Alembic lo fija al autogenerarlas.
 
@@ -238,6 +252,7 @@ Los tests de las migraciones comprueban que el esquema y la tabla de versiones s
 | `tests/` (raíz) | Configuración, migraciones y `/health` | Según el test |
 | `tests/unit/` | Reglas de negocio puras: formato del número y cálculo de importes | No |
 | `tests/repositories/` | Consultas: el contador de numeración | Sí |
+| `tests/services/` | Reglas que dependen de transacciones reales, como la concurrencia de los albaranes. Hacen `commit` de verdad y borran sus datos al terminar | Sí |
 | `tests/api/` | Los endpoints de principio a fin, con `client` | Sí |
 
 Los nombres de fichero deben ser únicos en todo `tests/`, porque las carpetas no llevan `__init__.py`.
@@ -258,7 +273,7 @@ Los nombres de fichero deben ser únicos en todo `tests/`, porque las carpetas n
 ## Limitaciones conocidas
 
 - Solo `document-service` usa la base de datos por ahora. `traceability-service` y `submission-service` aplicarán el mismo patrón con sus historias.
-- La primera migración (`0001`) está vacía: marca el punto de partida del historial. Las tablas llegan con las historias de usuario: `0002` crea las de los documentos (CU-1).
+- La primera migración (`0001`) está vacía: marca el punto de partida del historial. Las tablas llegan con las historias de usuario: `0002` crea las de los documentos (CU-1) y `0003` añade `source_line_id` a las líneas (CU-2).
 - Un número solo se devuelve con un *rollback*. Si se anula un documento ya guardado, su número no se reutiliza, que es lo esperado en una numeración fiscal. Lo trata CU-6.
 - Las migraciones se aplican en cada arranque y no hay una marcha atrás automática. Una migración que falla a la mitad deja el contenedor reiniciándose hasta que se corrige.
 - `GET /health` falla cuando la base de datos no responde. Separar la comprobación de que el proceso está vivo de la de que está listo para atender se aborda en el hito de observabilidad.

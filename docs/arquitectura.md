@@ -79,8 +79,8 @@ Si `document-service` crece y acumula mucha lógica de pedidos, albaranes y fact
 1. **Cada capa solo habla con la siguiente.** `api` llama a `services`, y `services` llama a `repositories`. Un endpoint que lee la base de datos directamente se salta la arquitectura, y deja las capas en simples carpetas con nombre.
 2. **Las dependencias van hacia abajo.** Un repositorio no importa un servicio, y un servicio no importa un router.
 3. **La sesión de base de datos se inyecta.** `api` la recibe con `Depends(get_session)` y la pasa hacia abajo. Así los tests pueden sustituirla (ver `client` y `session` en [`database.md`](database.md)).
-4. **Las excepciones de negocio se traducen en `api`.** Un servicio lanza una excepción propia (por ejemplo, un albarán que referencia a un pedido inexistente) y la capa `api` la convierte en el código HTTP, como un `404`. El servicio no conoce los códigos de estado.
-5. **Los servicios no importan los esquemas de la API.** `api` traduce los modelos de Pydantic a datos propios del servicio (en CU-1, `OrderData` y `OrderLineData`, que son `dataclass`). Así el servicio sigue sin conocer el formato de la petición, y se prueba con objetos simples.
+4. **Las excepciones de negocio se traducen en `api`.** Un servicio lanza una excepción propia de [`exceptions.py`](../services/document-service/app/exceptions.py) (por ejemplo, `ReferenceNotFound` si un albarán referencia a un pedido inexistente) y la capa `api` la convierte en el código HTTP, como un `404`. El servicio no conoce los códigos de estado.
+5. **Los servicios no importan los esquemas de la API.** `api` traduce los modelos de Pydantic a datos propios del servicio (`OrderData`, `DeliveryNoteData` y `LineData`, que son `dataclass`). Así el servicio sigue sin conocer el formato de la petición, y se prueba con objetos simples.
 6. **El servicio confirma la transacción.** El repositorio solo hace `flush`, y el servicio llama a `commit` al terminar el caso de uso, de modo que el número, el pedido y sus líneas se guardan juntos o no se guarda nada.
 7. **La respuesta se construye dentro del endpoint**, mientras la sesión sigue abierta. Si se devolviera el objeto de SQLAlchemy y se serializara después, leer las líneas podría necesitar la base de datos cuando la sesión ya se cerró.
 
@@ -90,12 +90,24 @@ Los datos que no cumplen el esquema de Pydantic (sin líneas, cantidad negativa,
 
 Los esquemas de entrada heredan de `RequestModel` ([`schemas/common.py`](../services/document-service/app/api/schemas/common.py)), que **prohíbe los campos desconocidos**. Si un cliente envía un campo que calcula el servidor, como `total`, recibe un `422` en lugar de creer que su valor se usó.
 
+### Errores de negocio
+
+Una petición con el formato correcto que rompe una regla (un pedido que no existe, una entrega mayor que lo pedido) la detecta el servicio, que lanza una subclase de `DomainError`. Cada subclase tiene su `code`, y [`api/errors.py`](../services/document-service/app/api/errors.py) las convierte con el mismo cuerpo común:
+
+| Excepción | Código | Respuesta |
+|---|---|---|
+| `ReferenceNotFound` | `REFERENCE_NOT_FOUND` | `404` |
+| `InvalidOrderLine` | `INVALID_ORDER_LINE` | `422` |
+| `QuantityExceeded` | `QUANTITY_EXCEEDED` | `422` |
+
+Un solo manejador (`domain_error_handler`) sirve para todas: responde `404` para `ReferenceNotFound` y `422` para el resto. Una excepción nueva solo necesita su `code` y heredar de `DomainError`. Como el servicio lanza la excepción antes de guardar nada, la petición rechazada no consume número de la serie.
+
 ### Errores en la documentación de la API
 
-FastAPI documenta por defecto el `422` con su propio formato (`{"detail": [...]}`), que no es el que devuelve este servicio. Cada endpoint que valida datos declara `responses=VALIDATION_ERROR_RESPONSE` ([`schemas/common.py`](../services/document-service/app/api/schemas/common.py)), y así `/docs` y `/openapi.json` describen el `422` con el cuerpo común, con un ejemplo. Un test (`tests/api/test_openapi.py`) comprueba que se documenta el nuestro y no el de FastAPI. Los endpoints nuevos de CU-2 y CU-3 deben declararlo también.
+FastAPI documenta por defecto el `422` con su propio formato (`{"detail": [...]}`), que no es el que devuelve este servicio. Cada endpoint declara sus errores en `responses` con `error_response("descripción")`, para cualquier código ([`schemas/common.py`](../services/document-service/app/api/schemas/common.py)): `responses={422: error_response("...")}`. Así `/docs` y `/openapi.json` describen cada error con el cuerpo común, con un ejemplo. Un test (`tests/api/test_openapi.py`) comprueba que se documenta el nuestro y no el de FastAPI. Los endpoints nuevos de CU-3 deben declararlos también.
 
 ## Limitaciones conocidas
 
-- Solo `document-service` tiene las capas con la estructura creada, y de momento solo para los pedidos (CU-1). `traceability-service` y `submission-service` la aplicarán cuando tengan lógica.
-- Todavía no hay excepciones de negocio: CU-1 solo tiene errores de validación. El módulo `exceptions.py` se añadirá con CU-2, que necesita `REFERENCE_NOT_FOUND`.
+- Solo `document-service` tiene las capas con la estructura creada, y de momento solo para los pedidos y los albaranes (CU-1 y CU-2). `traceability-service` y `submission-service` la aplicarán cuando tengan lógica.
+- Los mensajes de los errores están en inglés y no se traducen.
 - La regla de que cada capa solo habla con la siguiente la garantiza la revisión de código, no una herramienta. Se podría automatizar con una herramienta como `import-linter`.
