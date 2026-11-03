@@ -1,10 +1,10 @@
 from decimal import Decimal
 
-from app.services.order_service import OrderLineData, calculate_totals
+from app.services.pricing import LineData, calculate_totals
 
 
-def line(quantity: str, unit_price: str, vat_rate: str = "21") -> OrderLineData:
-    return OrderLineData("item", Decimal(quantity), Decimal(unit_price), Decimal(vat_rate))
+def line(quantity: str, unit_price: str, vat_rate: str = "21") -> LineData:
+    return LineData("item", Decimal(quantity), Decimal(unit_price), Decimal(vat_rate))
 
 
 def test_totals_of_a_single_line():
