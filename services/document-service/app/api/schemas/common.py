@@ -38,14 +38,15 @@ class ErrorResponse(BaseModel):
     error: ErrorBody = Field(description="What went wrong.")
 
 
-# Pass it to an endpoint as `responses=VALIDATION_ERROR_RESPONSE` so that /docs documents the
-# 422 with our body. Without it FastAPI documents its own default ({"detail": [...]}).
-VALIDATION_ERROR_RESPONSE = {
-    422: {
-        "model": ErrorResponse,
-        "description": "The request body is not valid: the message names each failing field.",
-    }
-}
+def error_response(description: str) -> dict:
+    """Entry for an endpoint's `responses`, so that /docs documents an error with our body.
+
+    Every endpoint declares its errors with it, such as `responses={422: error_response("...")}`.
+    Without it FastAPI documents its own default 422 ({"detail": [...]}), which is not what this
+    API returns.
+    """
+    return {"model": ErrorResponse, "description": description}
+
 
 # Amounts travel as JSON numbers, not strings (Pydantic writes a Decimal as a string by default).
 Amount = Annotated[Decimal, PlainSerializer(float, return_type=float, when_used="json")]

@@ -248,6 +248,56 @@ Se responde `422` si el pedido no tiene líneas, si una cantidad no es mayor que
 { "error": { "code": "VALIDATION_ERROR", "message": "lines.0.quantity: Input should be greater than 0" } }
 ```
 
+#### `POST /api/v1/delivery-notes` (CU-2)
+
+Registra un albarán que referencia a un pedido. Cada línea indica cuánto se entrega de una línea del pedido (`order_line` es su posición, empezando en 1) y no hace falta entregarlas todas. El cliente, las descripciones, los precios y el IVA son los del pedido, y el servidor asigna el `id`, el número de la serie `A` (`A-<año>-<correlativo de seis cifras>`), la fecha y los importes: ninguno se acepta en la petición.
+
+Un pedido puede entregarse en varios albaranes, pero **las cantidades de todos ellos sumadas no pueden superar las pedidas**. Un pedido de 10 unidades admite albaranes de 4 y de 6, pero no de 4 y de 7.
+
+```json
+{
+  "order_id": "62c13d37-67f6-42d1-918e-641e43072aa4",
+  "lines": [
+    { "order_line": 1, "quantity": 2 }
+  ]
+}
+```
+
+Respuesta `201`:
+
+```json
+{
+  "id": "0b6c3d8e-5f0a-4c53-8d5e-9a1d6f2d7c11",
+  "type": "DELIVERY_NOTE",
+  "number": "A-2026-000001",
+  "status": "ISSUED",
+  "issue_date": "2026-11-03",
+  "order_id": "62c13d37-67f6-42d1-918e-641e43072aa4",
+  "customer": { "name": "Acme S.L.", "tax_id": "B12345678" },
+  "lines": [
+    { "position": 1, "order_line": 1, "description": "Widget", "quantity": 2.0, "unit_price": 10.5, "vat_rate": 21.0 }
+  ],
+  "total_net": 21.0,
+  "total_vat": 4.41,
+  "total": 25.41
+}
+```
+
+Los errores usan el cuerpo común `{"error": {"code": "...", "message": "..."}}`:
+
+| Respuesta | Código | Cuándo |
+|---|---|---|
+| `404` | `REFERENCE_NOT_FOUND` | El pedido no existe, o el identificador es de un documento que no es un pedido |
+| `422` | `INVALID_ORDER_LINE` | `order_line` no es una línea del pedido |
+| `422` | `QUANTITY_EXCEEDED` | Lo entregado, sumando los albaranes anteriores, supera lo pedido |
+| `422` | `VALIDATION_ERROR` | Cuerpo mal formado: cantidad no mayor que cero, sin líneas, una línea del pedido repetida, falta un campo o hay uno desconocido |
+
+```json
+{ "error": { "code": "QUANTITY_EXCEEDED", "message": "line 1: 7 requested but only 6 pending (ordered 10, already delivered 4)" } }
+```
+
+Dos albaranes simultáneos del mismo pedido no pueden superar entre los dos lo pedido: el servidor bloquea el pedido mientras comprueba las cantidades y guarda el albarán.
+
 ### traceability-service
 
 | Método | Ruta | Descripción | CU | Respuestas |

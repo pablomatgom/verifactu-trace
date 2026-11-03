@@ -3,6 +3,7 @@ from app.models import DocumentType
 # The series of each document type: a rule of the numbering, so it lives next to the format.
 SERIES = {
     DocumentType.ORDER: "P",
+    DocumentType.DELIVERY_NOTE: "A",
 }
 
 

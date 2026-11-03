@@ -3,6 +3,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
 from app.api.schemas.common import ErrorBody, ErrorResponse
+from app.exceptions import DomainError, ReferenceNotFound
 
 
 def _describe(error: dict) -> str:
@@ -17,7 +18,7 @@ def _describe(error: dict) -> str:
     return f"{path}: {error['msg']}"
 
 
-async def validation_error_handler(request: Request, exc: RequestValidationError) -> JSONResponse:
+def validation_error_handler(request: Request, exc: RequestValidationError) -> JSONResponse:
     """Answer 422 with the common error body of the API contract.
 
     FastAPI's default is {"detail": [...]}; the README defines {"error": {"code", "message"}}.
@@ -27,6 +28,17 @@ async def validation_error_handler(request: Request, exc: RequestValidationError
     return JSONResponse(status_code=422, content=body.model_dump())
 
 
+def domain_error_handler(request: Request, exc: DomainError) -> JSONResponse:
+    """Answer a business rule error with the common error body.
+
+    A reference to something that does not exist is a 404; any other broken rule is a 422.
+    """
+    status_code = 404 if isinstance(exc, ReferenceNotFound) else 422
+    body = ErrorResponse(error=ErrorBody(code=exc.code, message=exc.message))
+    return JSONResponse(status_code=status_code, content=body.model_dump())
+
+
 def register_error_handlers(app: FastAPI) -> None:
     """Register the error handlers for the FastAPI app."""
     app.add_exception_handler(RequestValidationError, validation_error_handler)
+    app.add_exception_handler(DomainError, domain_error_handler)
