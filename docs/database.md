@@ -50,7 +50,7 @@ Compose pasa `DATABASE_URL` con el formato `postgresql://...`. SQLAlchemy lo aso
 
 ## Modelo de datos
 
-Pedidos, albaranes y facturas comparten una sola tabla, porque el contrato de la API los trata como un único recurso (`/documents`). Cada documento apunta al anterior de la cadena mediante `parent_id`. Hoy se crean pedidos (CU-1) y albaranes (CU-2).
+Pedidos, albaranes y facturas comparten una sola tabla, porque el contrato de la API los trata como un único recurso (`/documents`). Cada documento apunta al anterior de la cadena mediante `parent_id`. Hoy se crean pedidos (CU-1), albaranes (CU-2) y facturas (CU-3).
 
 ```mermaid
 erDiagram
@@ -60,7 +60,7 @@ erDiagram
 
     documents {
         uuid id PK
-        varchar type "ORDER"
+        varchar type "ORDER, DELIVERY_NOTE, INVOICE"
         varchar number UK "P-2026-000001"
         varchar status "ISSUED"
         date issue_date
@@ -88,7 +88,7 @@ erDiagram
     }
 ```
 
-La cadena de documentos se forma con `parent_id`: el albarán (CU-2) apunta a su pedido y la factura (CU-3) apuntará a su albarán. Lo mismo ocurre con las líneas: cada línea de un albarán apunta con `source_line_id` a la línea del pedido que entrega, y con eso se suma cuánto se ha entregado de cada una. `document_counters` queda suelta porque no tiene clave foránea: `documents.number` se construye con su valor, pero la base de datos no lo comprueba. El diagrama muestra las columnas clave, y las tablas de abajo las detallan todas.
+La cadena de documentos se forma con `parent_id`: el albarán (CU-2) apunta a su pedido y la factura (CU-3) apunta a su albarán. Lo mismo ocurre con las líneas: cada línea de un albarán apunta con `source_line_id` a la línea del pedido que entrega, y la de una factura a la línea del albarán que factura. Con eso se suma cuánto se ha entregado de cada línea del pedido. `document_counters` queda suelta porque no tiene clave foránea: `documents.number` se construye con su valor, pero la base de datos no lo comprueba. El diagrama muestra las columnas clave, y las tablas de abajo las detallan todas.
 
 ### Tablas
 
@@ -97,15 +97,15 @@ La cadena de documentos se forma con `parent_id`: el albarán (CU-2) apunta a su
 | Columna | Tipo | Notas |
 |---|---|---|
 | `id` | `UUID` | Clave primaria, la asigna el servidor |
-| `type` | `VARCHAR(20)` | `ORDER` o `DELIVERY_NOTE`. Indexada |
-| `series` | `VARCHAR(10)` | `P` para los pedidos y `A` para los albaranes |
-| `number` | `VARCHAR(40)` | **Único**, como `P-2026-000001` o `A-2026-000001` |
+| `type` | `VARCHAR(20)` | `ORDER`, `DELIVERY_NOTE` o `INVOICE`. Indexada |
+| `series` | `VARCHAR(10)` | `P` para los pedidos, `A` para los albaranes y `F` para las facturas |
+| `number` | `VARCHAR(40)` | **Único**, como `P-2026-000001`, `A-2026-000001` o `F-2026-000001` |
 | `status` | `VARCHAR(20)` | `ISSUED` por ahora |
 | `issue_date` | `DATE` | La pone el servidor con la fecha de hoy |
 | `customer_name` | `VARCHAR(200)` | Nombre del cliente |
 | `customer_tax_id` | `VARCHAR(20)` | NIF/CIF del cliente. Indexada |
 | `total_net`, `total_vat`, `total` | `NUMERIC(12,2)` | Los calcula el servidor |
-| `parent_id` | `UUID` | Clave foránea a `documents.id`: el documento anterior de la cadena (el pedido, en un albarán). Vacío en un pedido |
+| `parent_id` | `UUID` | Clave foránea a `documents.id`: el documento anterior de la cadena (el pedido, en un albarán, y el albarán, en una factura). Vacío en un pedido. En las facturas es **único**, porque un albarán se factura una vez |
 | `created_at` | `TIMESTAMPTZ` | Valor por defecto `now()` en la base de datos |
 
 **`document_lines`**: las líneas de un documento. Se borran con él (`ON DELETE CASCADE`).
@@ -114,7 +114,7 @@ La cadena de documentos se forma con `parent_id`: el albarán (CU-2) apunta a su
 |---|---|---|
 | `id` | `UUID` | Clave primaria |
 | `document_id` | `UUID` | Clave foránea a `documents.id`. Indexada |
-| `source_line_id` | `UUID` | Clave foránea a `document_lines.id`: la línea del documento anterior que esta línea entrega. Vacía en un pedido. Indexada |
+| `source_line_id` | `UUID` | Clave foránea a `document_lines.id`: la línea del documento anterior que esta línea entrega o factura. Vacía en un pedido. Indexada |
 | `position` | `INTEGER` | Orden de la línea, desde 1 |
 | `description` | `VARCHAR(300)` | |
 | `quantity` | `NUMERIC(12,3)` | Mayor que cero, hasta 3 decimales |
@@ -128,7 +128,7 @@ La cadena de documentos se forma con `parent_id`: el albarán (CU-2) apunta a su
 | Tema | Decisión | Por qué |
 |---|---|---|
 | Tipos y estados | `DocumentType` y `DocumentStatus` son `StrEnum` de Python (`models/document.py`) y se guardan como texto, no como `ENUM` nativo | Añadir un valor a un `ENUM` de PostgreSQL exige una migración con `ALTER TYPE`. Con texto basta un miembro nuevo en la enumeración |
-| Series | `P` para los pedidos y `A` para los albaranes, definidas en `services/numbering.py` junto al formato del número | Un solo sitio para saber cómo se numera cada tipo |
+| Series | `P` para los pedidos, `A` para los albaranes y `F` para las facturas, definidas en `services/numbering.py` junto al formato del número | Un solo sitio para saber cómo se numera cada tipo |
 | Importes | `NUMERIC` en la base de datos y `Decimal` en Python, nunca `float`. En el JSON viajan como números | Evita errores de redondeo binario |
 | Cálculo | Lo hace el servidor y la petición no puede enviarlo. Cada línea se redondea a céntimos (mitad hacia arriba) y el IVA se redondea **por línea** | Los totales cuadran con las líneas, como en una factura |
 | Restricciones | La base de datos repite las reglas de la API (cantidad > 0, precio ≥ 0, IVA entre 0 y 100) | Última defensa si algo salta la validación de la API |
@@ -158,6 +158,15 @@ Un pedido puede entregarse en varios albaranes, y la suma de lo entregado de cad
 3. Sin el bloqueo, los dos pasarían la comprobación y, entre los dos, entregarían más de lo pedido.
 
 Un test (`tests/services/test_delivery_note_concurrency.py`) fuerza ese solapamiento y falla si se quita el bloqueo. Los albaranes de pedidos distintos no se bloquean entre sí.
+
+### Una factura por albarán
+
+Un albarán se factura una sola vez, y esa regla se protege con dos defensas:
+
+1. **El servicio** bloquea la fila del albarán (`SELECT ... FOR UPDATE`) y comprueba que no tenga ya una factura. Si la tiene, responde `422 DELIVERY_NOTE_ALREADY_INVOICED`. Es la que da un error claro al cliente.
+2. **La base de datos** tiene un índice único parcial sobre `parent_id` que solo afecta a las facturas (`WHERE type = 'INVOICE'`), creado por la migración `0004`. Es la última defensa: aunque dos peticiones se saltaran la comprobación, la segunda factura se rechazaría. Es parcial porque varios albaranes sí pueden tener el mismo pedido como padre.
+
+La numeración de las facturas es correlativa y sin huecos por la misma razón que la de los pedidos: el contador de la serie `F` se actualiza dentro de la transacción de la factura, y si esta falla, el *rollback* devuelve el número. Una petición rechazada no consume número.
 
 El esquema (`documents`) está escrito en las migraciones, porque Alembic lo fija al autogenerarlas.
 
@@ -249,10 +258,10 @@ Los tests de las migraciones comprueban que el esquema y la tabla de versiones s
 
 | Carpeta | Qué prueba | ¿PostgreSQL? |
 |---|---|---|
-| `tests/` (raíz) | Configuración, migraciones y `/health` | Según el test |
+| `tests/` (raíz) | Configuración, migraciones, `/health` y el publicador de eventos | Según el test |
 | `tests/unit/` | Reglas de negocio puras: formato del número y cálculo de importes | No |
-| `tests/repositories/` | Consultas: el contador de numeración | Sí |
-| `tests/services/` | Reglas que dependen de transacciones reales, como la concurrencia de los albaranes. Hacen `commit` de verdad y borran sus datos al terminar | Sí |
+| `tests/repositories/` | Consultas y restricciones: el contador de numeración y el índice de una factura por albarán | Sí |
+| `tests/services/` | Reglas que dependen de transacciones reales, como la concurrencia de los albaranes y de las facturas, o el evento en Redis. Los de concurrencia hacen `commit` de verdad y borran sus datos al terminar | Sí (y Redis en uno) |
 | `tests/api/` | Los endpoints de principio a fin, con `client` | Sí |
 
 Los nombres de fichero deben ser únicos en todo `tests/`, porque las carpetas no llevan `__init__.py`.
@@ -273,7 +282,7 @@ Los nombres de fichero deben ser únicos en todo `tests/`, porque las carpetas n
 ## Limitaciones conocidas
 
 - Solo `document-service` usa la base de datos por ahora. `traceability-service` y `submission-service` aplicarán el mismo patrón con sus historias.
-- La primera migración (`0001`) está vacía: marca el punto de partida del historial. Las tablas llegan con las historias de usuario: `0002` crea las de los documentos (CU-1) y `0003` añade `source_line_id` a las líneas (CU-2).
+- La primera migración (`0001`) está vacía: marca el punto de partida del historial. Las tablas llegan con las historias de usuario: `0002` crea las de los documentos (CU-1) y `0003` añade `source_line_id` a las líneas (CU-2) y `0004` el índice de una factura por albarán (CU-3).
 - Un número solo se devuelve con un *rollback*. Si se anula un documento ya guardado, su número no se reutiliza, que es lo esperado en una numeración fiscal. Lo trata CU-6.
 - Las migraciones se aplican en cada arranque y no hay una marcha atrás automática. Una migración que falla a la mitad deja el contenedor reiniciándose hasta que se corrige.
 - `GET /health` falla cuando la base de datos no responde. Separar la comprobación de que el proceso está vivo de la de que está listo para atender se aborda en el hito de observabilidad.

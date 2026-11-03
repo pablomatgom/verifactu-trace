@@ -18,7 +18,7 @@ Ambos se lanzan en cada pull request hacia `main` y en cada push a `main`. `dock
 | Trabajo | Qué hace | Comando |
 |---|---|---|
 | `lint` | Comprueba el estilo y los errores comunes, y que el código está formateado | `ruff check .` y `ruff format --check .` |
-| `test` | Ejecuta las pruebas de un servicio, con una PostgreSQL desechable como servicio del trabajo. Una instancia por servicio (`document-service`, `traceability-service` y `submission-service`) | `python -m pytest` desde `services/<servicio>` |
+| `test` | Ejecuta las pruebas de un servicio, con una PostgreSQL y una Redis desechables como servicios del trabajo. Una instancia por servicio (`document-service`, `traceability-service` y `submission-service`) | `python -m pytest` desde `services/<servicio>` |
 | `integration` | Levanta el sistema completo con Docker Compose y comprueba que los cinco contenedores funcionan juntos | `docker compose up --build --wait` |
 
 Ambos usan Python 3.12, la misma versión que las imágenes Docker, y instalan las dependencias desde `requirements-dev.txt`, que agrupa las de los tres servicios y las herramientas de desarrollo.
@@ -31,13 +31,15 @@ La configuración está en [`ruff.toml`](../ruff.toml), y es la misma en local y
 - **Orden de los imports** (`I`, equivalente a `isort`), con `app` declarado como paquete propio para que los imports de cada servicio se agrupen bien.
 - **Formato**: líneas de hasta 100 caracteres. `ruff format --check` no modifica nada, solo falla si el código no está formateado.
 
-### Base de datos en los tests
+### Base de datos y Redis en los tests
 
-El trabajo `test` define `DATABASE_URL` y levanta un contenedor `postgres:17-alpine` como servicio, con el healthcheck de `pg_isready`, de modo que los pasos solo empiezan cuando la base de datos responde. Las credenciales (`test-only`) son de una base de datos que desaparece al terminar el trabajo, y no hay secretos. Si `DATABASE_URL` falta en el CI, los tests fallan en lugar de omitirse. El detalle está en [`database.md`](database.md).
+El trabajo `test` define `DATABASE_URL` y levanta un contenedor `postgres:17-alpine` como servicio, con el healthcheck de `pg_isready`, de modo que los pasos solo empiezan cuando la base de datos responde. Las credenciales (`test-only`) son de una base de datos que desaparece al terminar el trabajo, y no hay secretos. Si `DATABASE_URL` falta en el CI, los tests fallan en lugar de omitirse.
+
+Con `REDIS_URL` y un contenedor `redis:7-alpine` (healthcheck `redis-cli ping`) pasa lo mismo: sirve para los tests que comprueban que el evento `invoice.issued` llega de verdad al *stream*, y si `REDIS_URL` falta en el CI, esos tests fallan en lugar de omitirse. Los demás tests no necesitan Redis, porque el publicador se sustituye por uno falso. El detalle está en [`database.md`](database.md).
 
 ### Qué hacen los tests
 
-Cada servicio tiene sus pruebas en `tests/` y las ejecuta `pytest`. `traceability-service` y `submission-service` solo comprueban `GET /health` por ahora. Los de `document-service` cubren además las migraciones, el contador de numeración, el cálculo de importes, `POST /api/v1/orders` y `POST /api/v1/delivery-notes`, con la concurrencia de los albaranes (ver [`database.md`](database.md)), y crecerán con cada historia de usuario. Usan el cliente de pruebas de FastAPI (`TestClient`), que llama a la aplicación sin levantar un servidor.
+Cada servicio tiene sus pruebas en `tests/` y las ejecuta `pytest`. `traceability-service` y `submission-service` solo comprueban `GET /health` por ahora. Los de `document-service` cubren además las migraciones, el contador de numeración, el cálculo de importes, `POST /api/v1/orders`, `POST /api/v1/delivery-notes` y `POST /api/v1/invoices`, con la concurrencia de los albaranes y de las facturas y la publicación del evento (ver [`database.md`](database.md)), y crecerán con cada historia de usuario. Usan el cliente de pruebas de FastAPI (`TestClient`), que llama a la aplicación sin levantar un servidor.
 
 `pytest` se lanza **por servicio**, desde su carpeta, y no una sola vez desde la raíz. Los tres servicios tienen un paquete llamado `app`, y al ejecutarlos juntos Python solo importaría uno de ellos. La carpeta de cada servicio se añade al `pythonpath` mediante su `pyproject.toml`.
 
@@ -146,7 +148,7 @@ GHCR crea cada paquete como **privado** la primera vez que se publica. Si las im
 - Los SHA de las acciones se actualizan a mano. Dependabot podría proponer las actualizaciones automáticamente.
 - Los tests no miden cobertura. Se puede añadir cuando haya lógica de negocio que cubrir.
 - Los workflows no definen `timeout-minutes` ni `concurrency`. Un trabajo colgado consume minutos hasta el límite de GitHub, y varios push seguidos a la misma rama lanzan ejecuciones que no se cancelan entre sí.
-- La prueba de integración solo comprueba que el sistema arranca, que los esquemas existen y que `document-service` ha aplicado su migración. Redis todavía no lo usa ningún servicio, y las pruebas funcionales de la API se añadirán con las historias de usuario.
-- El contenedor de PostgreSQL del trabajo `test` se levanta para los tres servicios de la matriz, aunque de momento solo `document-service` lo usa.
+- La prueba de integración solo comprueba que el sistema arranca, que los esquemas existen y que `document-service` ha aplicado su migración. Las pruebas de Redis las hace el trabajo `test`, no este.
+- Los contenedores de PostgreSQL y de Redis del trabajo `test` se levantan para los tres servicios de la matriz, aunque de momento solo `document-service` los usa.
 - El trabajo `integration` reconstruye las imágenes en cada ejecución, sin la caché de capas que sí usa `docker.yml`.
 - El trabajo `integration` tiene `timeout-minutes: 10`. Los demás trabajos del repositorio todavía no definen límite de tiempo.
