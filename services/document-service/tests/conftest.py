@@ -12,10 +12,12 @@ import pytest
 from alembic import command
 from alembic.config import Config
 from fastapi.testclient import TestClient
+from redis import Redis
 from sqlalchemy import Engine
 from sqlalchemy.orm import Session
 
 from app.db import get_engine, get_session
+from app.events import EventPublisher, get_publisher
 from app.main import app
 
 # services/document-service/, two levels above this file (tests/conftest.py).
@@ -63,21 +65,53 @@ def session(engine: Engine) -> Iterator[Session]:
 
 
 @pytest.fixture
-def offline_client() -> Iterator[TestClient]:
+def redis_client() -> Iterator[Redis]:
+    """Client of the Redis of the tests, skipped locally and a failure in CI without REDIS_URL."""
+    if not os.environ.get("REDIS_URL"):
+        # Same rule as the `engine` fixture: in CI a missing Redis must fail the build.
+        if os.environ.get("CI"):
+            pytest.fail("REDIS_URL is not set")
+        pytest.skip("REDIS_URL is not set: start a Redis and point it to it")
+    client = Redis.from_url(os.environ["REDIS_URL"], decode_responses=True)
+    yield client
+    client.close()
+
+
+class FakePublisher:
+    """Publisher that keeps the events in a list instead of sending them to Redis."""
+
+    def __init__(self) -> None:
+        self.events: list[tuple[str, dict[str, str]]] = []
+
+    def publish(self, stream: str, fields: dict[str, str]) -> None:
+        self.events.append((stream, fields))
+
+
+@pytest.fixture
+def publisher() -> FakePublisher:
+    """The publisher the endpoints get in the tests. Ask for it to see what was published."""
+    return FakePublisher()
+
+
+@pytest.fixture
+def offline_client(publisher: EventPublisher) -> Iterator[TestClient]:
     """Test client with no database, for requests that are rejected before using it."""
     # The endpoint still asks for a session, so hand it a placeholder. If a test reaches the
     # database by mistake, it fails with an error instead of connecting somewhere.
     app.dependency_overrides[get_session] = lambda: object()
+    app.dependency_overrides[get_publisher] = lambda: publisher
     yield TestClient(app)
     app.dependency_overrides.clear()
 
 
 @pytest.fixture
-def client(session: Session) -> Iterator[TestClient]:
+def client(session: Session, publisher: EventPublisher) -> Iterator[TestClient]:
     """FastAPI test client that calls the app in-process, without starting a server."""
     # Whenever an endpoint asks for Depends(get_session), hand it the test session. The
     # endpoint does not change as it still asks for the same dependency.
     app.dependency_overrides[get_session] = lambda: session
+    # The same for the publisher: no test needs a Redis unless it asks for one on purpose.
+    app.dependency_overrides[get_publisher] = lambda: publisher
     yield TestClient(app)
     # Remove the override so it does not leak into the next test.
     app.dependency_overrides.clear()
