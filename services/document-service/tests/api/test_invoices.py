@@ -1,7 +1,7 @@
 import logging
 import re
 import uuid
-from datetime import date
+from datetime import UTC, date, datetime
 
 import pytest
 from fastapi.testclient import TestClient
@@ -199,7 +199,9 @@ def test_the_invoice_issued_event_is_published(client: TestClient, publisher):
             },
         )
     ]
-    assert publisher.events[0][1]["issued_at"].startswith(date.today().isoformat())
+    # issued_at is the creation instant in UTC, so it is compared with the UTC date: the local
+    # date is another day for a while after midnight.
+    assert publisher.events[0][1]["issued_at"].startswith(datetime.now(UTC).date().isoformat())
 
 
 def test_no_event_is_published_when_the_invoice_is_rejected(client: TestClient, publisher):

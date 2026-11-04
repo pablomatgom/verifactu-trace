@@ -170,6 +170,33 @@ La numeración de las facturas es correlativa y sin huecos por la misma razón q
 
 El esquema (`documents`) está escrito en las migraciones, porque Alembic lo fija al autogenerarlas.
 
+## Modelo de datos de `traceability-service`
+
+`traceability-service` aplica el mismo patrón en su esquema `traceability`, con una sola tabla, `trace_events`, que guarda los eventos de todos los documentos:
+
+| Columna | Tipo | Descripción |
+|---|---|---|
+| `id` | `uuid` | Clave primaria, asignada por el servidor |
+| `document_id` | `uuid` | Documento al que se refiere el evento. No es clave foránea: el documento vive en el esquema de otro servicio, y los servicios solo comparten identificadores |
+| `sequence` | `integer` | Posición en la cadena del documento, desde 1 |
+| `event_type` | `varchar(100)` | Tipo de evento, como `INVOICE_ISSUED` |
+| `occurred_at` | `timestamptz` | Cuándo ocurrió, según quien lo envía |
+| `payload` | `jsonb` | Datos del evento. Forman parte del hash |
+| `previous_hash` | `varchar(64)` | `hash` del evento anterior (64 ceros en el primero) |
+| `hash` | `varchar(64)` | SHA-256 hexadecimal del contenido canónico y `previous_hash` |
+| `source_message_id` | `varchar(64)` | Identificador de la entrada de Redis de la que viene, o vacío si viene del endpoint |
+| `created_at` | `timestamptz` | Cuándo se registró |
+
+Restricciones:
+
+- `UNIQUE (document_id, sequence)`: la cadena de un documento no tiene huecos ni posiciones repetidas. Su índice sirve también para las consultas por documento.
+- `UNIQUE (source_message_id)`: una entrada del *stream* entregada dos veces no se registra dos veces.
+- `sequence >= 1` y longitud 64 para los dos hashes.
+
+**Cómo se encadena.** Un evento nuevo necesita el último del documento y, para el primero, no hay fila que bloquear con `SELECT ... FOR UPDATE`. Por eso se toma un *advisory lock* de PostgreSQL (`pg_advisory_xact_lock(hashtext('trace:<documento>'))`) hasta el final de la transacción: "leer el último" y "guardar el siguiente" son un solo paso para los eventos del mismo documento, y los de documentos distintos no se esperan. La restricción única es la última defensa. El test `tests/services/test_event_concurrency.py` lanza seis eventos a la vez y comprueba que la cadena no se bifurca; sin el bloqueo falla.
+
+Las migraciones son `0001` (vacía) y `0002` (crea `trace_events`).
+
 ## Migraciones con Alembic
 
 Las migraciones son ficheros versionados en `migrations/versions/`. Cada uno describe un cambio del esquema, y Alembic aplica en orden solo los que faltan. La versión actual se guarda en la tabla `alembic_version`, **dentro del esquema del servicio**, para que cada servicio tenga su propio historial.
@@ -281,7 +308,7 @@ Los nombres de fichero deben ser únicos en todo `tests/`, porque las carpetas n
 
 ## Limitaciones conocidas
 
-- Solo `document-service` usa la base de datos por ahora. `traceability-service` y `submission-service` aplicarán el mismo patrón con sus historias.
+- `document-service` y `traceability-service` usan la base de datos. `submission-service` aplicará el mismo patrón con sus historias.
 - La primera migración (`0001`) está vacía: marca el punto de partida del historial. Las tablas llegan con las historias de usuario: `0002` crea las de los documentos (CU-1) y `0003` añade `source_line_id` a las líneas (CU-2) y `0004` el índice de una factura por albarán (CU-3).
 - Un número solo se devuelve con un *rollback*. Si se anula un documento ya guardado, su número no se reutiliza, que es lo esperado en una numeración fiscal. Lo trata CU-6.
 - Las migraciones se aplican en cada arranque y no hay una marcha atrás automática. Una migración que falla a la mitad deja el contenedor reiniciándose hasta que se corrige.
