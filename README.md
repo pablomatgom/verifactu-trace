@@ -361,6 +361,52 @@ El evento se publica **después de guardar** la factura. Si Redis no responde, l
 | `GET` | `/api/v1/traceability/documents/{id}/chain` | Devuelve la cadena documental (pedido → albarán → factura) | CU-11 | `200`, `404` |
 | `GET` | `/api/v1/traceability/documents/{id}/events` | Devuelve el histórico de eventos de un documento | CU-12 | `200`, `404` |
 
+#### `POST /api/v1/traceability/events` (CU-9)
+
+Registra un evento al final de la cadena de su documento. Es un endpoint **interno**: los eventos llegan normalmente desde el *stream* `invoice.issued` (ver más abajo), y este endpoint permite registrar otros a mano.
+
+```json
+{
+  "document_id": "5d2e8a6c-1f40-4b9a-9c77-3e0a6b4d1f52",
+  "event_type": "INVOICE_ISSUED",
+  "occurred_at": "2026-10-14T09:30:00Z",
+  "payload": { "number": "F-2026-000001", "total": "380.82" }
+}
+```
+
+Solo `document_id` y `event_type` son obligatorios. `occurred_at` (con zona horaria) vale por defecto la hora del servidor y `payload` es `{}`. El servidor asigna el resto:
+
+```json
+{
+  "id": "c04a8625-30b9-424d-8301-8d6185bcda4d",
+  "document_id": "5d2e8a6c-1f40-4b9a-9c77-3e0a6b4d1f52",
+  "sequence": 1,
+  "event_type": "INVOICE_ISSUED",
+  "occurred_at": "2026-10-14T09:30:00Z",
+  "payload": { "number": "F-2026-000001", "total": "380.82" },
+  "previous_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+  "hash": "0741fde33e4ee2990368a1ba86008a3ac66769e9e978b077905a9605369a4225"
+}
+```
+
+| Código | `error.code` | Cuándo |
+|---|---|---|
+| `422` | `VALIDATION_ERROR` | Falta `document_id` o `event_type`, no es un UUID, `occurred_at` no tiene zona horaria, o hay un campo desconocido (por ejemplo `hash` o `sequence`, que calcula el servidor) |
+
+**Cadena de hashes.** Cada documento tiene su propia cadena:
+
+- `sequence` cuenta desde 1 para cada documento.
+- `previous_hash` es el `hash` del evento anterior del mismo documento. El primero usa un hash inicial de 64 ceros.
+- `hash` es el SHA-256 del contenido canónico del evento seguido de `previous_hash`. El contenido canónico es un JSON con las claves ordenadas y sin espacios (`document_id`, `event_type`, `occurred_at` en UTC, `payload` y `sequence`), de modo que se puede recalcular más tarde para verificar la cadena (CU-10).
+- Dos eventos del mismo documento que llegan a la vez se encadenan uno detrás de otro, en el orden en que obtienen el bloqueo de la cadena. Nunca se bifurca.
+
+**Consumo del evento `invoice.issued`.** Al arrancar, `traceability-service` lee el *stream* `invoice.issued` con un grupo de consumidores (`traceability-service`) y registra cada factura como un evento `INVOICE_ISSUED` en la cadena de la factura. El `payload` lleva `number`, `delivery_note_id`, `order_id`, `total` e `issued_at`, y `occurred_at` es `issued_at`.
+
+- Confirma (`XACK`) cada entrada **después de guardar** el evento. Si el servicio cae o la base de datos no responde, la entrada queda pendiente y se entrega de nuevo, así que no se pierde por este lado.
+- Si una entrada se entrega dos veces, el evento no se duplica: guarda el identificador de la entrada (`source_message_id`) y lo reconoce.
+- Si el servicio estuvo parado, registra al volver las facturas emitidas mientras tanto, porque el grupo empieza en el principio del *stream*.
+- Una entrada mal formada (sin campos o con valores ilegibles) se descarta con un error en el log para no bloquear las siguientes.
+
 ### submission-service
 
 | Método | Ruta | Descripción | CU | Respuestas |
@@ -410,7 +456,7 @@ Normalmente el envío se dispara solo al recibir el evento `invoice.issued`. `PO
 
 - **Documento**: `ISSUED` o `CANCELLED`. Una factura emitida no se puede anular, solo rectificar.
 - **Envío**: `PENDING` → `SENT` → `ACCEPTED` o `REJECTED`. Ante un fallo transitorio pasa a `RETRYING` con espera creciente y, agotados los intentos, a `FAILED`.
-- **Hash encadenado**: cada evento guarda `sequence`, `previousHash` y `hash`, calculado como SHA-256 del contenido canónico del evento concatenado con `previousHash`. La verificación recalcula la cadena y devuelve la primera posición inválida si la hay.
+- **Hash encadenado**: cada evento guarda `sequence`, `previous_hash` y `hash`, calculado como SHA-256 del contenido canónico del evento concatenado con `previous_hash`. Cada documento tiene su propia cadena. La verificación recalcula la cadena y devuelve la primera posición inválida si la hay.
 - **Autenticación**: queda fuera del MVP. Se planteará una clave de API en cabecera (`X-API-Key`) en hitos posteriores.
 
 ## Desarrollo local

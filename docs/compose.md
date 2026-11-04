@@ -38,7 +38,7 @@ docker compose exec postgres psql -U verifactu -d verifactu   # consola de Postg
 | `postgres` | `postgres:17-alpine` | Base de datos, con un esquema por servicio |
 | `redis` | `redis:7-alpine` | Cola de eventos entre servicios |
 | `document-service` | construida desde `services/document-service` | Pedidos, albaranes y facturas |
-| `traceability-service` | construida desde `services/traceability-service` | Cadena de hashes y auditoría |
+| `traceability-service` | construida desde `services/traceability-service` | Cadena de hashes y auditoría. Lee el *stream* `invoice.issued` de Redis |
 | `submission-service` | construida desde `services/submission-service` | Envío a la AEAT simulada |
 
 ## Decisiones de diseño

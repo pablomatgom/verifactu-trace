@@ -113,14 +113,31 @@ Cuando una factura se emite, el servicio lo anuncia al resto del sistema con el 
 
 **Se publica después del `commit`**, no antes: si se publicara antes y la transacción fallara, otros servicios recibirían una factura que no existe. Y si Redis no responde, **la factura se emite igual**: el error se registra en el log (`Event invoice.issued of invoice F-... was not published`) y la respuesta es `201`. Un fallo de quien reacciona a las facturas no debe impedir emitirlas. Redis se conecta con un tiempo máximo de 2 segundos para que no deje la petición esperando.
 
+### Consumo de eventos
+
+`traceability-service` es quien lee el *stream* `invoice.issued`. Lo hace [`app/consumer.py`](../services/traceability-service/app/consumer.py), un hilo en segundo plano que arranca con la aplicación (el `lifespan` de FastAPI en `main.py`) y se detiene con ella. Para cada entrada llama a `event_service.record_event`, la misma función que usa el endpoint, así que el consumidor está al mismo nivel que `api`: traduce una entrada de Redis a la llamada al servicio.
+
+Lee con un **grupo de consumidores**, que recuerda qué entradas se entregaron y cuáles se confirmaron (`XACK`):
+
+- Cada entrada la procesa una sola réplica del grupo, y otro servicio con su propio grupo recibe también todas.
+- Se confirma **después del `commit`**. Si el servicio cae entre las dos cosas, la entrada se entrega otra vez, y `source_message_id` hace que registrarla de nuevo no haga nada (el procesamiento es idempotente).
+- Si falla algo transitorio (la base de datos no responde), la entrada no se confirma, queda pendiente y se reintenta tras una espera de 2 segundos.
+- Cada réplica lee primero sus entradas pendientes, después reclama (`XAUTOCLAIM`) las que otro consumidor lleva 30 segundos sin confirmar (un contenedor que se sustituyó deja sus entradas pendientes con su nombre) y por último pide las nuevas.
+- Una entrada que no se puede interpretar nunca (le faltan campos) se confirma y se registra como error, para que no bloquee las siguientes.
+- El grupo se crea desde el principio del *stream* (`id="0"`), de modo que las facturas emitidas antes de que el servicio arrancara por primera vez también se registran.
+
+Los tests del consumidor (`tests/test_consumer.py`) usan un Redis real, con un *stream* y un grupo propios en cada test.
+
 ### Errores en la documentación de la API
 
 FastAPI documenta por defecto el `422` con su propio formato (`{"detail": [...]}`), que no es el que devuelve este servicio. Cada endpoint declara sus errores en `responses` con `error_response("descripción")`, para cualquier código ([`schemas/common.py`](../services/document-service/app/api/schemas/common.py)): `responses={422: error_response("...")}`. Así `/docs` y `/openapi.json` describen cada error con el cuerpo común, con un ejemplo. Un test (`tests/api/test_openapi.py`) comprueba que se documenta el nuestro y no el de FastAPI. Los endpoints nuevos deben declararlos también.
 
 ## Limitaciones conocidas
 
-- Solo `document-service` tiene las capas con la estructura creada, y de momento solo para los pedidos, los albaranes y las facturas (CU-1 a CU-3). `traceability-service` y `submission-service` la aplicarán cuando tengan lógica.
+- `document-service` (CU-1 a CU-3) y `traceability-service` (CU-9) tienen las capas con la estructura creada. `submission-service` la aplicará cuando tenga lógica.
 - Los mensajes de los errores están en inglés y no se traducen.
 - **El evento `invoice.issued` se puede perder.** Se guarda la factura y después se publica el evento: son dos operaciones en sistemas distintos y no pueden ser atómicas. Si el proceso cae o Redis falla entre las dos, la factura existe y los demás servicios no se enteran. La solución habitual es un *outbox transaccional*: guardar el evento en una tabla dentro de la misma transacción que la factura y que otro proceso lo publique. No está hecho en este hito. Mientras tanto, el fallo se registra en el log y se puede detectar.
-- Hay un solo *stream* sin recorte (`XTRIM`): crece mientras nadie lo consuma. Los consumidores y la política de retención llegan con `traceability-service` y `submission-service`.
+- Hay un solo *stream* sin recorte (`XTRIM`): las entradas se quedan aunque ya estén confirmadas. La política de retención queda pendiente, y habrá que decidirla cuando `submission-service` también lo lea, para no recortar entradas que un grupo todavía no ha confirmado.
+- Una entrada ilegible se descarta, no se guarda en una cola de entradas fallidas (*dead letter*). Queda registrada en el log.
+- Con varias réplicas, el orden entre eventos de un mismo documento es el del bloqueo de su cadena, que normalmente coincide con el del *stream*, pero no está garantizado si dos réplicas leen entradas consecutivas del mismo documento a la vez.
 - La regla de que cada capa solo habla con la siguiente la garantiza la revisión de código, no una herramienta. Se podría automatizar con una herramienta como `import-linter`.
