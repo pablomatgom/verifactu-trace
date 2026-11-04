@@ -190,9 +190,10 @@ class InvoiceIssuedConsumer:
             if fields is None:
                 raise InvalidEntry(f"entry {message_id} no longer exists in the stream")
             data = to_event(message_id, fields)
-        except InvalidEntry as error:
+        except InvalidEntry:
             # Waiting would not fix it: acknowledge it so it does not block the ones after it.
-            logger.error("Discarded an invalid entry of %s: %s", self._stream, error)
+            # The log carries the reason, which is the message of the exception.
+            logger.exception("Discarded an invalid entry of %s", self._stream)
             self._client.xack(self._stream, self._group, message_id)
             return
 

@@ -56,8 +56,10 @@ def test_an_entry_without_a_field_is_invalid(field: str):
 
 
 def test_an_entry_with_an_empty_field_is_invalid():
+    fields = entry(number="")
+
     with pytest.raises(InvalidEntry, match="number"):
-        to_event("1-0", entry(number=""))
+        to_event("1-0", fields)
 
 
 @pytest.mark.parametrize(
@@ -69,5 +71,7 @@ def test_an_entry_with_an_empty_field_is_invalid():
     ],
 )
 def test_an_entry_with_a_value_that_cannot_be_read_is_invalid(changes: dict, reason: str):
+    fields = entry(**changes)
+
     with pytest.raises(InvalidEntry, match=reason):
-        to_event("1-0", entry(**changes))
+        to_event("1-0", fields)

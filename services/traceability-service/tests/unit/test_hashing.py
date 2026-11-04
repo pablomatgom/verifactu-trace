@@ -46,7 +46,10 @@ def test_the_hash_of_an_event_does_not_change_between_versions():
 
 
 def test_the_same_event_always_gives_the_same_hash():
-    assert compute_hash(content(), GENESIS_HASH) == compute_hash(content(), GENESIS_HASH)
+    first = compute_hash(content(), GENESIS_HASH)
+    second = compute_hash(content(), GENESIS_HASH)
+
+    assert first == second
 
 
 def test_the_order_of_the_payload_keys_does_not_matter():
