@@ -31,5 +31,7 @@ def test_publish_wraps_the_redis_errors():
     # Nothing listens on port 1, so the connection fails without needing a Redis.
     unreachable = Redis.from_url("redis://127.0.0.1:1/0", socket_connect_timeout=0.2)
 
+    publisher = RedisEventPublisher(unreachable)
+
     with pytest.raises(EventPublishError, match="invoice.issued"):
-        RedisEventPublisher(unreachable).publish("invoice.issued", {"a": "b"})
+        publisher.publish("invoice.issued", {"a": "b"})
