@@ -79,6 +79,12 @@ services:
       DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
       DATABASE_SCHEMA: submissions
       REDIS_URL: redis://redis:6379/0
+      # How the simulated AEAT answers and how the failed submissions are retried. The defaults
+      # are in .env.example; change them in .env to see the retries (AEAT_SIMULATION=flaky).
+      AEAT_SIMULATION: ${AEAT_SIMULATION:-accept}
+      AEAT_FAILURE_RATE: ${AEAT_FAILURE_RATE:-0.5}
+      SUBMISSION_MAX_ATTEMPTS: ${SUBMISSION_MAX_ATTEMPTS:-5}
+      SUBMISSION_RETRY_BASE_SECONDS: ${SUBMISSION_RETRY_BASE_SECONDS:-5}
     ports:
       - "127.0.0.1:8003:8003"
     networks:
