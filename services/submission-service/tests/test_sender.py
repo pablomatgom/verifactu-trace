@@ -121,7 +121,7 @@ def test_an_unexpected_error_in_one_submission_does_not_stop_the_others(
         def __init__(self, bad: uuid.UUID):
             self.bad = bad
 
-        def send(self, invoice_id: uuid.UUID, invoice_number: str | None) -> AeatResponse:
+        def send(self, invoice_id: uuid.UUID) -> AeatResponse:
             if invoice_id == self.bad:
                 raise ConnectionError("the AEAT client broke")
             return ACCEPTED

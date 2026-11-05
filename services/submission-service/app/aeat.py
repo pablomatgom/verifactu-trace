@@ -41,7 +41,7 @@ class RandomSource(Protocol):
 class AeatClient(Protocol):
     """Something that can send an invoice to the AEAT."""
 
-    def send(self, invoice_id: uuid.UUID, invoice_number: str | None) -> AeatResponse:
+    def send(self, invoice_id: uuid.UUID) -> AeatResponse:
         """Send the invoice and return the answer. It does not raise for a refusal or an outage."""
         ...
 
@@ -74,7 +74,7 @@ class SimulatedAeat:
         self._failure_rate = failure_rate
         self._rng = rng or secrets.SystemRandom()
 
-    def send(self, invoice_id: uuid.UUID, invoice_number: str | None) -> AeatResponse:
+    def send(self, invoice_id: uuid.UUID) -> AeatResponse:
         if self._simulation == "reject":
             return AeatResponse(AeatOutcome.REJECTED, "AEAT_INVALID_RECORD")
         if self._simulation == "fail" or (

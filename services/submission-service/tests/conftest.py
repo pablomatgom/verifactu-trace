@@ -109,7 +109,7 @@ class ScriptedAeat:
         self._responses = list(responses)
         self.calls: list[uuid.UUID] = []
 
-    def send(self, invoice_id: uuid.UUID, invoice_number: str | None) -> AeatResponse:
+    def send(self, invoice_id: uuid.UUID) -> AeatResponse:
         self.calls.append(invoice_id)
         if len(self._responses) > 1:
             return self._responses.pop(0)

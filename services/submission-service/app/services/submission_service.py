@@ -76,12 +76,12 @@ def send(
     submission = submission_repository.get(session, submission_id)
     if submission is None or submission.status != SubmissionStatus.SENT:
         return submission
-    invoice_id, invoice_number = submission.invoice_id, submission.invoice_number
+    invoice_id = submission.invoice_id
     # End the transaction before calling out, so the connection is not held while the AEAT
     # takes its time to answer.
     session.commit()
 
-    response = aeat.send(invoice_id, invoice_number)
+    response = aeat.send(invoice_id)
 
     now = now or datetime.now(UTC)
     submission = submission_repository.get(session, submission_id)
