@@ -49,8 +49,10 @@ def test_the_database_rejects_a_second_invoice_of_the_same_delivery_note(session
     )
 
     # The service would refuse this. Going around it shows the index is the last defence.
+    second_invoice = invoice_of(delivery_note, "T-2026-000001")
+
     with pytest.raises(IntegrityError, match="uq_documents_one_invoice_per_delivery_note"):
-        document_repository.add(session, invoice_of(delivery_note, "T-2026-000001"))
+        document_repository.add(session, second_invoice)
 
 
 def test_many_delivery_notes_can_share_their_order(session: Session):
