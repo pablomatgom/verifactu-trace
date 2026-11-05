@@ -197,6 +197,32 @@ Restricciones:
 
 Las migraciones son `0001` (vacía) y `0002` (crea `trace_events`).
 
+## Modelo de datos de `submission-service`
+
+`submission-service` aplica el mismo patrón en su esquema `submissions`, con una tabla, `submissions`, con **un envío por factura**:
+
+| Columna | Tipo | Descripción |
+|---|---|---|
+| `id` | `uuid` | Clave primaria, asignada por el servidor |
+| `invoice_id` | `uuid` | Factura que se envía. Único, y no es clave foránea: la factura vive en el esquema de otro servicio |
+| `invoice_number` | `varchar(40)` | Número de la factura, si se conoce (viene en el evento, pero no en el disparo manual) |
+| `status` | `varchar(20)` | `PENDING`, `SENT`, `ACCEPTED`, `REJECTED`, `RETRYING` o `FAILED`. Es texto, no un `ENUM` de PostgreSQL, por la misma razón que en `document-service` |
+| `attempts` | `integer` | Intentos hechos |
+| `next_attempt_at` | `timestamptz` | Cuándo se puede intentar de nuevo. Vacío cuando el envío es definitivo |
+| `last_error` | `varchar(100)` | Por qué falló o se rechazó el último intento, como `AEAT_UNAVAILABLE` |
+| `aeat_reference` | `varchar(100)` | Referencia que dio la AEAT al aceptarlo |
+| `created_at`, `updated_at` | `timestamptz` | Cuándo se creó y cuándo cambió por última vez |
+
+Restricciones e índices:
+
+- `UNIQUE (invoice_id)`: una factura se envía una vez, aunque su evento llegue dos veces o alguien lo pida también a mano. Es lo que hace idempotente el consumo del evento: el servicio inserta con `ON CONFLICT DO NOTHING`, y si la factura ya tenía envío, no hace nada.
+- `attempts >= 0`.
+- Índice `(status, next_attempt_at)`, para que el proceso de envío encuentre rápido los que tocan.
+
+**Cómo se reparten los envíos entre réplicas.** El proceso de envío elige los envíos que toca intentar con `SELECT ... FOR UPDATE SKIP LOCKED`: si otra réplica ya ha bloqueado una fila, se la salta en vez de esperar. Después los marca `SENT` y confirma **antes** de llamar a la AEAT, así que otra réplica no los ve como pendientes. El test `tests/services/test_claim_concurrency.py` comprueba que una fila bloqueada por un proceso se la salta el otro; sin `SKIP LOCKED` falla.
+
+Las migraciones son `0001` (vacía) y `0002` (crea `submissions`).
+
 ## Migraciones con Alembic
 
 Las migraciones son ficheros versionados en `migrations/versions/`. Cada uno describe un cambio del esquema, y Alembic aplica en orden solo los que faltan. La versión actual se guarda en la tabla `alembic_version`, **dentro del esquema del servicio**, para que cada servicio tenga su propio historial.
@@ -308,7 +334,7 @@ Los nombres de fichero deben ser únicos en todo `tests/`, porque las carpetas n
 
 ## Limitaciones conocidas
 
-- `document-service` y `traceability-service` usan la base de datos. `submission-service` aplicará el mismo patrón con sus historias.
+- Los tres servicios usan la base de datos con el mismo patrón.
 - La primera migración (`0001`) está vacía: marca el punto de partida del historial. Las tablas llegan con las historias de usuario: `0002` crea las de los documentos (CU-1) y `0003` añade `source_line_id` a las líneas (CU-2) y `0004` el índice de una factura por albarán (CU-3).
 - Un número solo se devuelve con un *rollback*. Si se anula un documento ya guardado, su número no se reutiliza, que es lo esperado en una numeración fiscal. Lo trata CU-6.
 - Las migraciones se aplican en cada arranque y no hay una marcha atrás automática. Una migración que falla a la mitad deja el contenedor reiniciándose hasta que se corrige.
