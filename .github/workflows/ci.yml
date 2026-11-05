@@ -130,6 +130,10 @@ jobs:
             "SELECT version_num FROM traceability.alembic_version")
           echo "traceability-service migration: $version"
           test -n "$version"
+          version=$(docker compose exec -T postgres psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -tAc \
+            "SELECT version_num FROM submissions.alembic_version")
+          echo "submission-service migration: $version"
+          test -n "$version"
 
       - name: Show logs on failure
         if: failure()
