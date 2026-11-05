@@ -411,12 +411,69 @@ Solo `document_id` y `event_type` son obligatorios. `occurred_at` (con zona hora
 
 | Método | Ruta | Descripción | CU | Respuestas |
 |---|---|---|---|---|
-| `POST` | `/api/v1/submissions` | Solicita el envío de una factura a la AEAT simulada | CU-13 | `202`, `404`, `409` |
+| `POST` | `/api/v1/submissions` | Solicita el envío de una factura a la AEAT simulada | CU-13 | `202`, `409`, `422` |
 | `GET` | `/api/v1/submissions/{id}` | Consulta el estado de un envío | CU-14 | `200`, `404` |
 | `GET` | `/api/v1/submissions` | Lista envíos. Filtros: `invoiceId`, `status` | CU-14, CU-16 (extra) | `200` |
 | `POST` | `/api/v1/submissions/{id}/retry` | Reintenta manualmente un envío fallido o rechazado | CU-15 (extra) | `202`, `404`, `409` |
 
 Normalmente el envío se dispara solo al recibir el evento `invoice.issued`. `POST /api/v1/submissions` permite lanzarlo manualmente.
+
+#### `POST /api/v1/submissions` (CU-13)
+
+Pide el envío de una factura a la AEAT simulada. Solo lleva el identificador de la factura:
+
+```json
+{ "invoice_id": "5d2e8a6c-1f40-4b9a-9c77-3e0a6b4d1f52" }
+```
+
+Responde `202` porque la factura **todavía no se ha enviado**: el envío queda registrado como `PENDING` y un proceso en segundo plano lo envía y lo reintenta.
+
+```json
+{
+  "id": "c8f4a1d0-7e22-4b0c-9d51-6a3e8f2b1c04",
+  "invoice_id": "5d2e8a6c-1f40-4b9a-9c77-3e0a6b4d1f52",
+  "invoice_number": null,
+  "status": "PENDING",
+  "attempts": 0,
+  "next_attempt_at": "2026-10-14T09:30:00.123456Z",
+  "last_error": null,
+  "aeat_reference": null
+}
+```
+
+| Código | `error.code` | Cuándo |
+|---|---|---|
+| `409` | `SUBMISSION_ALREADY_EXISTS` | La factura ya tiene un envío (porque llegó su evento o porque ya se pidió a mano) |
+| `422` | `VALIDATION_ERROR` | Falta `invoice_id`, no es un UUID o hay un campo desconocido |
+
+El servicio **no comprueba que la factura exista**, porque las facturas pertenecen a `document-service`. Esa comprobación llegará cuando haya una consulta de documentos (CU-4), y es la razón de que este endpoint no responda `404`.
+
+**Envío automático.** Al arrancar, el servicio lee el *stream* `invoice.issued` con su propio grupo de consumidores (`submission-service`, distinto del de trazabilidad, así que los dos reciben cada factura) y registra un envío `PENDING` por cada una. Funciona igual que el consumidor de trazabilidad: confirma cada entrada después de guardar, la reintenta si el servicio cae y descarta las entradas mal formadas. Una factura solo tiene **un envío**, así que si su evento llega dos veces, o ya se pidió a mano, no se crea otro.
+
+**Estados y reintentos.** Un segundo proceso en segundo plano busca cada segundo los envíos que toca intentar y los manda a la AEAT:
+
+```
+PENDING ──► SENT ──► ACCEPTED
+              │ └──► REJECTED                (la AEAT lo rechaza: es definitivo)
+              └────► RETRYING ──► SENT ...   (la AEAT no responde: se reintenta)
+                        └──────► FAILED      (se agotaron los intentos: es definitivo)
+```
+
+- `SENT` significa que hay un intento en curso. Cada intento incrementa `attempts`.
+- Si la AEAT no responde, el envío pasa a `RETRYING` y se reintenta con una **espera creciente**: el doble tras cada fallo (5, 10, 20, 40 segundos con los valores por defecto, con un máximo de una hora). Tras el último intento fallido pasa a `FAILED`. El último error queda en `last_error`.
+- Si la AEAT rechaza la factura, no se reintenta: enviarla otra vez daría la misma respuesta.
+- Los reintentos se guardan en la base de datos (`next_attempt_at`), no en memoria, así que sobreviven a un reinicio y cualquier réplica puede hacerlos. Un envío que lleva un minuto en `SENT` sin respuesta (el servicio cayó mientras lo enviaba) se da por perdido y se vuelve a enviar.
+
+**AEAT simulada.** El servicio habla con la AEAT a través de una interfaz (`AeatClient`), y la implementación actual es una simulación dentro del propio servicio. Se elige con variables de entorno, que `compose.yaml` pasa al contenedor (se cambian en `.env`):
+
+| Variable | Valor por defecto | Efecto |
+|---|---|---|
+| `AEAT_SIMULATION` | `accept` | `accept`: acepta todos los envíos. `reject`: los rechaza. `fail`: no responde nunca, así que acaban en `FAILED`. `flaky`: cada intento falla con la probabilidad de `AEAT_FAILURE_RATE` y si no, lo acepta |
+| `AEAT_FAILURE_RATE` | `0.5` | Probabilidad de fallo con `flaky` (de 0 a 1) |
+| `SUBMISSION_MAX_ATTEMPTS` | `5` | Intentos antes de pasar a `FAILED` |
+| `SUBMISSION_RETRY_BASE_SECONDS` | `5` | Espera tras el primer fallo; se duplica después |
+
+Para ver los reintentos, por ejemplo, con `AEAT_SIMULATION=flaky` en `.env`, `docker compose up -d submission-service` y emitir facturas. Todavía no hay una consulta del estado de un envío (CU-14), así que se mira en la base de datos: `SELECT status, attempts, last_error FROM submissions.submissions`.
 
 ### Ejemplos
 

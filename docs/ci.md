@@ -39,7 +39,7 @@ Con `REDIS_URL` y un contenedor `redis:7-alpine` (healthcheck `redis-cli ping`) 
 
 ### Qué hacen los tests
 
-Cada servicio tiene sus pruebas en `tests/` y las ejecuta `pytest`. `submission-service` solo comprueba `GET /health` por ahora. `traceability-service` cubre además las migraciones, el cálculo del hash, el encadenado de eventos (con su concurrencia), `POST /api/v1/traceability/events` y el consumidor del *stream* contra un Redis real. Los de `document-service` cubren además las migraciones, el contador de numeración, el cálculo de importes, `POST /api/v1/orders`, `POST /api/v1/delivery-notes` y `POST /api/v1/invoices`, con la concurrencia de los albaranes y de las facturas y la publicación del evento (ver [`database.md`](database.md)), y crecerán con cada historia de usuario. Usan el cliente de pruebas de FastAPI (`TestClient`), que llama a la aplicación sin levantar un servidor.
+Cada servicio tiene sus pruebas en `tests/` y las ejecuta `pytest`. `submission-service` cubre las migraciones, los estados y los reintentos de un envío (con esperas crecientes, intentos agotados y envíos perdidos), la AEAT simulada, `POST /api/v1/submissions`, el consumidor del *stream* contra un Redis real, el proceso de envío y el flujo completo de un evento hasta su aceptación. `traceability-service` cubre además las migraciones, el cálculo del hash, el encadenado de eventos (con su concurrencia), `POST /api/v1/traceability/events` y el consumidor del *stream* contra un Redis real. Los de `document-service` cubren además las migraciones, el contador de numeración, el cálculo de importes, `POST /api/v1/orders`, `POST /api/v1/delivery-notes` y `POST /api/v1/invoices`, con la concurrencia de los albaranes y de las facturas y la publicación del evento (ver [`database.md`](database.md)), y crecerán con cada historia de usuario. Usan el cliente de pruebas de FastAPI (`TestClient`), que llama a la aplicación sin levantar un servidor.
 
 `pytest` se lanza **por servicio**, desde su carpeta, y no una sola vez desde la raíz. Los tres servicios tienen un paquete llamado `app`, y al ejecutarlos juntos Python solo importaría uno de ellos. La carpeta de cada servicio se añade al `pythonpath` mediante su `pyproject.toml`.
 
@@ -51,7 +51,7 @@ Las pruebas unitarias comprueban cada servicio por separado. El trabajo `integra
 2. Ejecuta `docker compose up --build --wait --wait-timeout 180`. Construye las tres imágenes y espera a que todos los contenedores estén sanos. Si alguno no lo consigue en tres minutos, el trabajo falla.
 3. Llama a `GET /health` de cada servicio en los puertos `8001`, `8002` y `8003`, con reintentos.
 4. Consulta PostgreSQL y comprueba que existen los tres esquemas (`documents`, `traceability` y `submissions`), lo que verifica que el script de inicialización se ejecutó.
-5. Comprueba que `document-service` y `traceability-service` aplicaron sus migraciones al arrancar (consulta su tabla `alembic_version`).
+5. Comprueba que los tres servicios aplicaron sus migraciones al arrancar (consulta su tabla `alembic_version`).
 6. Si algo falla, muestra los logs de todos los contenedores.
 7. Siempre, al terminar, apaga el sistema y elimina los volúmenes (`docker compose down -v`).
 

@@ -128,16 +128,36 @@ Lee con un **grupo de consumidores**, que recuerda qué entradas se entregaron y
 
 Los tests del consumidor (`tests/test_consumer.py`) usan un Redis real, con un *stream* y un grupo propios en cada test.
 
+### Envío y reintentos
+
+`submission-service` lee el mismo *stream* con su propio grupo de consumidores, y su [`app/consumer.py`](../services/submission-service/app/consumer.py) funciona como el de trazabilidad, con una diferencia: solo **registra** el envío (`PENDING`). Enviarlo es trabajo de otro proceso en segundo plano, [`app/sender.py`](../services/submission-service/app/sender.py). Los dos arrancan con la aplicación (el `lifespan` de `main.py`) y se detienen con ella.
+
+Se separan porque tienen ritmos distintos: leer el *stream* es esperar entradas, y enviar es llamar a un sistema externo que puede tardar o fallar. Así una AEAT lenta no retrasa el registro de las facturas, y el registro no depende de que la AEAT responda.
+
+**La base de datos es la cola de los reintentos.** Cada envío guarda su estado y cuándo se puede intentar de nuevo (`next_attempt_at`). El proceso de envío busca cada segundo los que tocan, y no hay temporizadores en memoria. Por eso un reinicio no pierde ningún reintento, y cualquier réplica puede hacerlo (`SKIP LOCKED` evita que dos envíen el mismo).
+
+El intento se hace en tres pasos, cada uno en su transacción:
+
+1. **Reclamar**: se marcan `SENT`, se cuenta el intento y se confirma.
+2. **Enviar a la AEAT**, sin ninguna transacción abierta: la conexión a la base de datos no se queda ocupada mientras la AEAT tarda en responder.
+3. **Guardar el resultado**: `ACCEPTED`, `REJECTED`, `RETRYING` (con la fecha del siguiente intento) o `FAILED`.
+
+Si el servicio cae entre el paso 1 y el 3, el envío se queda en `SENT`. Pasado un minuto sin respuesta se da por perdido y se vuelve a reclamar, así que un envío no se queda atascado. El coste es que, en ese caso, la factura puede llegar dos veces a la AEAT; una AEAT real tendría que tratar el envío de forma idempotente.
+
+La AEAT es una interfaz (`AeatClient`) y `SimulatedAeat` es su implementación actual. Dependiendo de la interfaz, el resto del servicio no cambiaría con un cliente de la AEAT real, y los tests usan una AEAT guionizada que responde lo que se le diga. Los tiempos se pasan como parámetro (`now`), así que los tests de las esperas crecientes no tienen que esperar.
+
 ### Errores en la documentación de la API
 
 FastAPI documenta por defecto el `422` con su propio formato (`{"detail": [...]}`), que no es el que devuelve este servicio. Cada endpoint declara sus errores en `responses` con `error_response("descripción")`, para cualquier código ([`schemas/common.py`](../services/document-service/app/api/schemas/common.py)): `responses={422: error_response("...")}`. Así `/docs` y `/openapi.json` describen cada error con el cuerpo común, con un ejemplo. Un test (`tests/api/test_openapi.py`) comprueba que se documenta el nuestro y no el de FastAPI. Los endpoints nuevos deben declararlos también.
 
 ## Limitaciones conocidas
 
-- `document-service` (CU-1 a CU-3) y `traceability-service` (CU-9) tienen las capas con la estructura creada. `submission-service` la aplicará cuando tenga lógica.
+- Los tres servicios tienen ya las capas con la estructura creada: `document-service` (CU-1 a CU-3), `traceability-service` (CU-9) y `submission-service` (CU-13).
 - Los mensajes de los errores están en inglés y no se traducen.
 - **El evento `invoice.issued` se puede perder.** Se guarda la factura y después se publica el evento: son dos operaciones en sistemas distintos y no pueden ser atómicas. Si el proceso cae o Redis falla entre las dos, la factura existe y los demás servicios no se enteran. La solución habitual es un *outbox transaccional*: guardar el evento en una tabla dentro de la misma transacción que la factura y que otro proceso lo publique. No está hecho en este hito. Mientras tanto, el fallo se registra en el log y se puede detectar.
-- Hay un solo *stream* sin recorte (`XTRIM`): las entradas se quedan aunque ya estén confirmadas. La política de retención queda pendiente, y habrá que decidirla cuando `submission-service` también lo lea, para no recortar entradas que un grupo todavía no ha confirmado.
+- Hay un solo *stream* sin recorte (`XTRIM`): las entradas se quedan aunque ya estén confirmadas. La política de retención queda pendiente, y habrá que decidirla sabiendo que lo leen dos grupos (trazabilidad y envío), para no recortar entradas que un grupo todavía no ha confirmado.
 - Una entrada ilegible se descarta, no se guarda en una cola de entradas fallidas (*dead letter*). Queda registrada en el log.
+- Los dos consumidores (`traceability-service` y `submission-service`) tienen el mismo código de lectura del *stream*, repetido en cada servicio. Es una decisión consciente: cada servicio es independiente y no comparten librerías. Si hubiera más consumidores, compensaría extraerlo.
+- El envío a la AEAT es simulado. Un envío que se pierde a mitad (el servicio cae mientras envía) se repite pasado un minuto, así que la AEAT real recibiría la factura dos veces y tendría que tratarlo de forma idempotente.
 - Con varias réplicas, el orden entre eventos de un mismo documento es el del bloqueo de su cadena, que normalmente coincide con el del *stream*, pero no está garantizado si dos réplicas leen entradas consecutivas del mismo documento a la vez.
 - La regla de que cada capa solo habla con la siguiente la garantiza la revisión de código, no una herramienta. Se podría automatizar con una herramienta como `import-linter`.
