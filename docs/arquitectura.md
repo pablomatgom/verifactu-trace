@@ -97,11 +97,12 @@ Una petición con el formato correcto que rompe una regla (un pedido que no exis
 | Excepción | Código | Respuesta |
 |---|---|---|
 | `ReferenceNotFound` | `REFERENCE_NOT_FOUND` | `404` |
+| `DocumentNotFound` | `DOCUMENT_NOT_FOUND` | `404` |
 | `InvalidOrderLine` | `INVALID_ORDER_LINE` | `422` |
 | `QuantityExceeded` | `QUANTITY_EXCEEDED` | `422` |
 | `DeliveryNoteAlreadyInvoiced` | `DELIVERY_NOTE_ALREADY_INVOICED` | `422` |
 
-Un solo manejador (`domain_error_handler`) sirve para todas: responde `404` para `ReferenceNotFound` y `422` para el resto. Una excepción nueva solo necesita su `code` y heredar de `DomainError`. Como el servicio lanza la excepción antes de guardar nada, la petición rechazada no consume número de la serie.
+Un solo manejador (`domain_error_handler`) sirve para todas: responde `404` para las que heredan de `NotFound` (`ReferenceNotFound`, cuando la petición se refiere a un documento que no existe, y `DocumentNotFound`, cuando se consulta uno) y `422` para el resto. Una excepción nueva solo necesita su `code` y heredar de `DomainError` (o de `NotFound`, si debe responder `404`). Como el servicio lanza la excepción antes de guardar nada, la petición rechazada no consume número de la serie.
 
 ### Eventos
 
@@ -152,7 +153,7 @@ FastAPI documenta por defecto el `422` con su propio formato (`{"detail": [...]}
 
 ## Limitaciones conocidas
 
-- Los tres servicios tienen ya las capas con la estructura creada: `document-service` (CU-1 a CU-3), `traceability-service` (CU-9) y `submission-service` (CU-13).
+- Los tres servicios tienen ya las capas con la estructura creada: `document-service` (CU-1 a CU-4), `traceability-service` (CU-9) y `submission-service` (CU-13).
 - Los mensajes de los errores están en inglés y no se traducen.
 - **El evento `invoice.issued` se puede perder.** Se guarda la factura y después se publica el evento: son dos operaciones en sistemas distintos y no pueden ser atómicas. Si el proceso cae o Redis falla entre las dos, la factura existe y los demás servicios no se enteran. La solución habitual es un *outbox transaccional*: guardar el evento en una tabla dentro de la misma transacción que la factura y que otro proceso lo publique. No está hecho en este hito. Mientras tanto, el fallo se registra en el log y se puede detectar.
 - Hay un solo *stream* sin recorte (`XTRIM`): las entradas se quedan aunque ya estén confirmadas. La política de retención queda pendiente, y habrá que decidirla sabiendo que lo leen dos grupos (trazabilidad y envío), para no recortar entradas que un grupo todavía no ha confirmado.

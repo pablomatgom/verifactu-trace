@@ -12,10 +12,20 @@ class DomainError(Exception):
         self.message = message
 
 
-class ReferenceNotFound(DomainError):
+class NotFound(DomainError):
+    """Something the request asks for or refers to does not exist: the API answers 404."""
+
+
+class ReferenceNotFound(NotFound):
     """The document the request refers to does not exist (or is not of the expected type)."""
 
     code = "REFERENCE_NOT_FOUND"
+
+
+class DocumentNotFound(NotFound):
+    """The document that is asked for does not exist."""
+
+    code = "DOCUMENT_NOT_FOUND"
 
 
 class InvalidOrderLine(DomainError):

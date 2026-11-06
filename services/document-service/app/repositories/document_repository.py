@@ -2,7 +2,7 @@ import uuid
 from decimal import Decimal
 
 from sqlalchemy import func, select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from app.models import Document, DocumentLine, DocumentType
 
@@ -16,6 +16,20 @@ def add(session: Session, document: Document) -> Document:
     session.add(document)
     session.flush()
     return document
+
+
+def get(session: Session, document_id: uuid.UUID) -> Document | None:
+    """Return the document with that id, whatever its type, with its lines and their sources.
+
+    The lines are loaded here, in one query each, so that building the response does not trigger
+    one more query per line.
+    """
+    query = (
+        select(Document)
+        .where(Document.id == document_id)
+        .options(selectinload(Document.lines).joinedload(DocumentLine.source_line))
+    )
+    return session.scalar(query)
 
 
 def get_for_update(

@@ -36,6 +36,17 @@ def test_docs_do_not_expose_notes_for_developers(offline_client: TestClient):
     assert "ALTER TYPE" not in spec
 
 
+def test_docs_describe_the_404_of_a_document_with_the_common_error_body(
+    offline_client: TestClient,
+):
+    spec = offline_client.get("/openapi.json").json()
+
+    responses = spec["paths"]["/api/v1/documents/{document_id}"]["get"]["responses"]
+    for status in ("404", "422"):
+        schema = responses[status]["content"]["application/json"]["schema"]
+        assert schema["$ref"].endswith("/ErrorResponse"), status
+
+
 def test_docs_describe_the_errors_of_a_delivery_note_with_the_common_error_body(
     offline_client: TestClient,
 ):
