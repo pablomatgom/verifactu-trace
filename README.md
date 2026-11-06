@@ -204,7 +204,7 @@ Esta sección define el contrato de la API que expone `verifactu-trace` a travé
 | `POST` | `/api/v1/orders` | Registra un pedido | CU-1 | `201`, `422` |
 | `POST` | `/api/v1/delivery-notes` | Registra un albarán que referencia a un pedido | CU-2 | `201`, `404`, `422` |
 | `POST` | `/api/v1/invoices` | Emite una factura que referencia a un albarán | CU-3 | `201`, `404`, `422` |
-| `GET` | `/api/v1/documents/{id}` | Consulta un documento por identificador | CU-4 | `200`, `404` |
+| `GET` | `/api/v1/documents/{id}` | Consulta un documento por identificador | CU-4 | `200`, `404`, `422` |
 | `GET` | `/api/v1/documents` | Lista documentos. Filtros: `type`, `customer`, `series`, `from`, `to`, `status` | CU-5 | `200` |
 | `POST` | `/api/v1/documents/{id}/cancel` | Anula un pedido o albarán no facturado | CU-6 (extra) | `200`, `404`, `409` |
 | `GET` | `/api/v1/documents/{id}/discrepancies` | Detecta diferencias entre pedido, albarán y factura | CU-7 (extra) | `200`, `404` |
@@ -352,6 +352,39 @@ Dos peticiones simultáneas para el mismo albarán no pueden emitir dos facturas
 
 El evento se publica **después de guardar** la factura. Si Redis no responde, la factura se emite igual (`201`) y el fallo queda en el log, porque un servicio que reacciona a las facturas no debe impedir emitirlas. Eso significa que el evento se puede perder; ver las limitaciones en [`docs/arquitectura.md`](docs/arquitectura.md).
 
+#### `GET /api/v1/documents/{id}` (CU-4)
+
+Consulta un pedido, un albarán o una factura por su identificador. Los tres tipos se devuelven con **la misma forma**, y `type` indica de cuál se trata (`ORDER`, `DELIVERY_NOTE` o `INVOICE`). La consulta no modifica nada.
+
+Respuesta `200` (un albarán):
+
+```json
+{
+  "id": "0b6c3d8e-5f0a-4c53-8d5e-9a1d6f2d7c11",
+  "type": "DELIVERY_NOTE",
+  "number": "A-2026-000001",
+  "status": "ISSUED",
+  "issue_date": "2026-11-02",
+  "parent_id": "62c13d37-67f6-42d1-918e-641e43072aa4",
+  "customer": { "name": "Acme S.L.", "tax_id": "B12345678" },
+  "lines": [
+    { "position": 1, "source_line": 1, "description": "Widget", "quantity": 2.0, "unit_price": 10.5, "vat_rate": 21.0 }
+  ],
+  "total_net": 21.0,
+  "total_vat": 4.41,
+  "total": 25.41
+}
+```
+
+La cadena documental se recorre con dos campos. `parent_id` es el documento anterior de la cadena: el pedido de un albarán y el albarán de una factura (en un pedido vale `null`). `source_line` es la posición de la línea del documento anterior de la que viene cada línea: la del pedido que entrega una línea de albarán, la del albarán que factura una línea de factura (en un pedido vale `null`). Con ellos un cliente puede ir de una factura a su pedido consultando cada `parent_id`.
+
+| Respuesta | Código | Cuándo |
+|---|---|---|
+| `404` | `DOCUMENT_NOT_FOUND` | No existe ningún documento con ese identificador |
+| `422` | `VALIDATION_ERROR` | El identificador no es un UUID |
+
+Las respuestas de creación (`POST /orders`, `/delivery-notes` y `/invoices`) conservan su forma, con campos propios de cada tipo (`order_id`, `delivery_note_id`...). Esta consulta usa la forma común para los tres.
+
 ### traceability-service
 
 | Método | Ruta | Descripción | CU | Respuestas |
@@ -446,7 +479,7 @@ Responde `202` porque la factura **todavía no se ha enviado**: el envío queda 
 | `409` | `SUBMISSION_ALREADY_EXISTS` | La factura ya tiene un envío (porque llegó su evento o porque ya se pidió a mano) |
 | `422` | `VALIDATION_ERROR` | Falta `invoice_id`, no es un UUID o hay un campo desconocido |
 
-El servicio **no comprueba que la factura exista**, porque las facturas pertenecen a `document-service`. Esa comprobación llegará cuando haya una consulta de documentos (CU-4), y es la razón de que este endpoint no responda `404`.
+El servicio **no comprueba que la factura exista**, porque las facturas pertenecen a `document-service`. Podría hacerlo con la consulta de documentos (CU-4), pero acoplaría los dos servicios: el envío dejaría de funcionar si el otro cae. Es la razón de que este endpoint no responda `404`.
 
 **Envío automático.** Al arrancar, el servicio lee el *stream* `invoice.issued` con su propio grupo de consumidores (`submission-service`, distinto del de trazabilidad, así que los dos reciben cada factura) y registra un envío `PENDING` por cada una. Funciona igual que el consumidor de trazabilidad: confirma cada entrada después de guardar, la reintenta si el servicio cae y descarta las entradas mal formadas. Una factura solo tiene **un envío**, así que si su evento llega dos veces, o ya se pidió a mano, no se crea otro.
 
