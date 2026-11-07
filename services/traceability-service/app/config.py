@@ -20,6 +20,14 @@ def database_url() -> str:
     return url.replace("postgresql://", "postgresql+psycopg://", 1)
 
 
+def document_service_url() -> str:
+    """Base URL of document-service, where the documents of a chain are asked for."""
+    try:
+        return os.environ["DOCUMENT_SERVICE_URL"]
+    except KeyError:
+        raise RuntimeError("The DOCUMENT_SERVICE_URL environment variable is not set") from None
+
+
 def redis_url() -> str:
     """Connection URL of the Redis where the events are read from."""
     try:

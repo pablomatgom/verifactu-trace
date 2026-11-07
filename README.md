@@ -442,7 +442,7 @@ Los documentos se ordenan por fecha de emisión descendente y, dentro del mismo 
 |---|---|---|---|---|
 | `POST` | `/api/v1/traceability/events` | Registra un evento con su hash encadenado. **Interno**: se alimenta de la cola y no se publica en el gateway | CU-9 | `201`, `422` |
 | `GET` | `/api/v1/traceability/documents/{id}/verification` | Verifica la integridad de la cadena de registros | CU-10 | `200`, `404`, `422` |
-| `GET` | `/api/v1/traceability/documents/{id}/chain` | Devuelve la cadena documental (pedido → albarán → factura) | CU-11 | `200`, `404` |
+| `GET` | `/api/v1/traceability/documents/{id}/chain` | Devuelve la cadena documental (pedido → albarán → factura) | CU-11 | `200`, `404`, `422`, `502`, `503` |
 | `GET` | `/api/v1/traceability/documents/{id}/events` | Devuelve el histórico de eventos de un documento | CU-12 | `200`, `404`, `422` |
 
 #### `POST /api/v1/traceability/events` (CU-9)
@@ -531,6 +531,30 @@ Un evento falla si no cumple alguna de estas tres comprobaciones:
 | `422` | `VALIDATION_ERROR` | El identificador no es un UUID |
 
 **Qué no detecta.** La cadena detecta manipulaciones, no las impide: la base de datos acepta un `UPDATE`, y la verificación lo descubre después. Tampoco puede detectar que se **borren los últimos eventos**, ni que se **reescriba el último** recalculando su hash, porque ningún evento posterior responde por ellos. Para eso haría falta guardar el último hash fuera de esta base de datos (en un servicio externo, o publicado). Está en las limitaciones de [`docs/arquitectura.md`](docs/arquitectura.md).
+
+#### `GET /api/v1/traceability/documents/{id}/chain` (CU-11)
+
+Devuelve los documentos que respaldan una factura, en el orden en que se hicieron: el pedido, el albarán y la factura. `{id}` es el de la **factura**.
+
+```json
+{
+  "invoice_id": "5d2e8a6c-1f40-4b9a-9c77-3e0a6b4d1f52",
+  "chain": [
+    { "type": "ORDER", "id": "3f1c0b7a-...", "number": "P-2026-000001", "issue_date": "2026-10-10" },
+    { "type": "DELIVERY_NOTE", "id": "9a7b2d1e-...", "number": "A-2026-000001", "issue_date": "2026-10-12" },
+    { "type": "INVOICE", "id": "5d2e8a6c-...", "number": "F-2026-000001", "issue_date": "2026-10-14" }
+  ]
+}
+```
+
+Este servicio no guarda los documentos, solo sus eventos. Por eso reconstruye la cadena **a partir de las referencias** que guarda `document-service`: pide la factura, sigue su `parent_id` hasta el albarán, y el de este hasta el pedido (ver `GET /api/v1/documents/{id}`). La dirección de `document-service` se pasa en la variable `DOCUMENT_SERVICE_URL`, que `compose.yaml` ya define. A diferencia de CU-9, CU-10 y CU-12, esta consulta **depende de que `document-service` esté en marcha**.
+
+| Respuesta | Código | Cuándo |
+|---|---|---|
+| `404` | `INVOICE_NOT_FOUND` | No existe una factura con ese id. También si el id es el de un pedido o un albarán |
+| `422` | `VALIDATION_ERROR` | El identificador no es un UUID |
+| `502` | `INCONSISTENT_CHAIN` | `document-service` devuelve documentos que no forman la cadena factura → albarán → pedido. No debería ocurrir mientras se respeten las referencias |
+| `503` | `DOCUMENT_SERVICE_UNAVAILABLE` | `document-service` no responde (3 segundos de espera como máximo) o devuelve un error |
 
 #### `GET /api/v1/traceability/documents/{id}/events` (CU-12)
 
@@ -639,11 +663,11 @@ Para ver los reintentos, por ejemplo, con `AEAT_SIMULATION=flaky` en `.env`, `do
 
 ```json
 {
-  "invoiceId": "5d2e8a6c-1f40-4b9a-9c77-3e0a6b4d1f52",
+  "invoice_id": "5d2e8a6c-1f40-4b9a-9c77-3e0a6b4d1f52",
   "chain": [
-    { "type": "ORDER", "id": "3f1c0b7a-...", "issuedAt": "2026-10-10T08:00:00Z" },
-    { "type": "DELIVERY_NOTE", "id": "9a7b2d1e-...", "issuedAt": "2026-10-12T10:15:00Z" },
-    { "type": "INVOICE", "id": "5d2e8a6c-...", "issuedAt": "2026-10-14T09:30:00Z" }
+    { "type": "ORDER", "id": "3f1c0b7a-...", "number": "P-2026-000001", "issue_date": "2026-10-10" },
+    { "type": "DELIVERY_NOTE", "id": "9a7b2d1e-...", "number": "A-2026-000001", "issue_date": "2026-10-12" },
+    { "type": "INVOICE", "id": "5d2e8a6c-...", "number": "F-2026-000001", "issue_date": "2026-10-14" }
   ]
 }
 ```

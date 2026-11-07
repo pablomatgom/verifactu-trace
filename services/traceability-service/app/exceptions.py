@@ -23,3 +23,24 @@ class EventsNotFound(DomainError):
 
     code = "EVENTS_NOT_FOUND"
     status_code = 404
+
+
+class InvoiceNotFound(DomainError):
+    """There is no invoice with that id: the id does not exist or it belongs to another kind."""
+
+    code = "INVOICE_NOT_FOUND"
+    status_code = 404
+
+
+class InconsistentChain(DomainError):
+    """document-service answered with documents that do not form an order-note-invoice chain."""
+
+    code = "INCONSISTENT_CHAIN"
+    status_code = 502
+
+
+class DocumentServiceUnavailable(DomainError):
+    """document-service did not answer, so the documents of the chain cannot be known."""
+
+    code = "DOCUMENT_SERVICE_UNAVAILABLE"
+    status_code = 503

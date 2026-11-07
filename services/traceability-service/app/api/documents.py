@@ -5,9 +5,16 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
 from app.api.schemas.common import error_response
-from app.api.schemas.events import ChainVerificationRead, EventHistory, EventRead
+from app.api.schemas.events import (
+    ChainDocument,
+    ChainVerificationRead,
+    DocumentChainRead,
+    EventHistory,
+    EventRead,
+)
 from app.db import get_session
-from app.services import event_service, verification
+from app.documents_client import DocumentClient, get_document_client
+from app.services import chain_service, event_service, verification
 
 router = APIRouter(prefix="/api/v1/traceability/documents", tags=["documents"])
 
@@ -67,4 +74,43 @@ def verify_chain(
         valid=result.valid,
         events_checked=result.events_checked,
         first_invalid_sequence=result.first_invalid_sequence,
+    )
+
+
+@router.get(
+    "/{invoice_id}/chain",
+    summary="Get the documentary chain of an invoice",
+    response_description="The order, the delivery note and the invoice, in that order.",
+    responses={
+        404: error_response("There is no invoice with that id (code INVOICE_NOT_FOUND)."),
+        422: error_response("The identifier is not a valid UUID (code VALIDATION_ERROR)."),
+        502: error_response(
+            "document-service returned documents that do not form a chain (code INCONSISTENT_CHAIN)."
+        ),
+        503: error_response(
+            "document-service cannot be reached (code DOCUMENT_SERVICE_UNAVAILABLE)."
+        ),
+    },
+)
+def get_chain(
+    invoice_id: uuid.UUID, client: Annotated[DocumentClient, Depends(get_document_client)]
+) -> DocumentChainRead:
+    """Get the documents an invoice comes from: its order, its delivery note and itself.
+
+    They are listed in the order they were made. The chain is rebuilt from the references between
+    the documents, starting at the invoice and following each one to the document it comes from,
+    which document-service holds: if it is down, this endpoint answers 503. An id that is not an
+    invoice, even if it is another kind of document, is a 404.
+    """
+    return DocumentChainRead(
+        invoice_id=invoice_id,
+        chain=[
+            ChainDocument(
+                type=document.type,
+                id=document.id,
+                number=document.number,
+                issue_date=document.issue_date,
+            )
+            for document in chain_service.get_chain(client, invoice_id)
+        ],
     )
