@@ -59,3 +59,16 @@ class EventHistory(BaseModel):
     events: list[EventRead] = Field(
         description="The events, ordered by `sequence`: the first thing that happened first."
     )
+
+
+class ChainVerificationRead(BaseModel):
+    """The result of checking the integrity of the chain of events of a document."""
+
+    document_id: uuid.UUID = Field(description="Id of the document that was verified.")
+    valid: bool = Field(
+        description="True if every event holds: its data, its hashes and its position are intact."
+    )
+    events_checked: int = Field(description="Number of events in the chain of the document.")
+    first_invalid_sequence: int | None = Field(
+        description="`sequence` of the first event that does not hold, or null if the chain is valid."
+    )
