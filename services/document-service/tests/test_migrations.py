@@ -37,3 +37,19 @@ def test_upgrade_can_run_twice(engine: Engine, alembic_cfg: Config):
     # The test passes if neither call raises.
     command.upgrade(alembic_cfg, "head")
     command.upgrade(alembic_cfg, "head")
+
+
+def test_the_list_of_documents_has_one_index_for_its_order_and_the_date_filters(engine: Engine):
+    with engine.connect() as connection:
+        indexes = (
+            connection.execute(
+                text("SELECT indexname FROM pg_indexes WHERE tablename = 'documents'")
+            )
+            .scalars()
+            .all()
+        )
+
+    # (issue_date, number) gives the order of the list; the index of the date alone was dropped
+    # because that one covers it too.
+    assert "ix_documents_issue_date_number" in indexes
+    assert "ix_documents_issue_date" not in indexes

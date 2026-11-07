@@ -205,7 +205,7 @@ Esta sección define el contrato de la API que expone `verifactu-trace` a travé
 | `POST` | `/api/v1/delivery-notes` | Registra un albarán que referencia a un pedido | CU-2 | `201`, `404`, `422` |
 | `POST` | `/api/v1/invoices` | Emite una factura que referencia a un albarán | CU-3 | `201`, `404`, `422` |
 | `GET` | `/api/v1/documents/{id}` | Consulta un documento por identificador | CU-4 | `200`, `404`, `422` |
-| `GET` | `/api/v1/documents` | Lista documentos. Filtros: `type`, `customer`, `series`, `from`, `to`, `status` | CU-5 | `200` |
+| `GET` | `/api/v1/documents` | Lista documentos. Filtros: `type`, `customer`, `series`, `from`, `to`, `status` | CU-5 | `200`, `422` |
 | `POST` | `/api/v1/documents/{id}/cancel` | Anula un pedido o albarán no facturado | CU-6 (extra) | `200`, `404`, `409` |
 | `GET` | `/api/v1/documents/{id}/discrepancies` | Detecta diferencias entre pedido, albarán y factura | CU-7 (extra) | `200`, `404` |
 | `POST` | `/api/v1/invoices/{id}/corrections` | Emite una factura rectificativa | CU-8 (extra) | `201`, `404`, `422` |
@@ -384,6 +384,57 @@ La cadena documental se recorre con dos campos. `parent_id` es el documento ante
 | `422` | `VALIDATION_ERROR` | El identificador no es un UUID |
 
 Las respuestas de creación (`POST /orders`, `/delivery-notes` y `/invoices`) conservan su forma, con campos propios de cada tipo (`order_id`, `delivery_note_id`...). Esta consulta usa la forma común para los tres.
+
+#### `GET /api/v1/documents` (CU-5)
+
+Lista pedidos, albaranes y facturas. Todos los parámetros son opcionales y **los filtros se suman**: un documento tiene que cumplirlos todos.
+
+| Parámetro | Filtra por |
+|---|---|
+| `type` | Tipo: `ORDER`, `DELIVERY_NOTE` o `INVOICE` |
+| `customer` | Cliente: el texto es su NIF/CIF exacto, o parte de su nombre (sin distinguir mayúsculas) |
+| `series` | Serie: `P`, `A` o `F` |
+| `status` | Estado: `ISSUED` por ahora |
+| `from`, `to` | Fecha de emisión, desde `from` hasta `to`, **ambas incluidas** |
+| `page` | Número de página, desde 1 (por defecto `1`) |
+| `size` | Documentos por página, de 1 a 100 (por defecto `20`) |
+
+```
+GET /api/v1/documents?type=INVOICE&customer=acme&from=2026-11-01&page=1&size=2
+```
+
+Respuesta `200`, con los documentos más recientes primero. Cada elemento lleva la cabecera y los importes del documento, sin las líneas (para ver una factura entera se usa `GET /api/v1/documents/{id}`):
+
+```json
+{
+  "items": [
+    {
+      "id": "5d2e8a6c-1f40-4b9a-9c77-3e0a6b4d1f52",
+      "type": "INVOICE",
+      "number": "F-2026-000002",
+      "status": "ISSUED",
+      "issue_date": "2026-11-05",
+      "parent_id": "0b6c3d8e-5f0a-4c53-8d5e-9a1d6f2d7c11",
+      "customer": { "name": "Acme S.L.", "tax_id": "B12345678" },
+      "total_net": 21.0,
+      "total_vat": 4.41,
+      "total": 25.41
+    }
+  ],
+  "page": 1,
+  "size": 2,
+  "total": 134
+}
+```
+
+`total` es el número de documentos que cumplen los filtros en **todas** las páginas, no solo en esta: con él un cliente sabe cuántas páginas hay (`ceil(total / size)`). Una página más allá de la última devuelve `items` vacío y conserva el `total`. Si ningún documento cumple los filtros, la respuesta es `200` con `items` vacío y `total` a `0`, no un `404`.
+
+Los documentos se ordenan por fecha de emisión descendente y, dentro del mismo día, por número descendente. El orden es siempre el mismo, así que un documento no aparece en dos páginas ni se salta mientras el cliente las recorre.
+
+| Respuesta | Código | Cuándo |
+|---|---|---|
+| `422` | `VALIDATION_ERROR` | Un parámetro no es válido: `type` o `status` desconocidos, una fecha mal formada, `page` menor que 1 o `size` fuera de 1 a 100 |
+| `422` | `INVALID_DATE_RANGE` | `from` es posterior a `to` |
 
 ### traceability-service
 

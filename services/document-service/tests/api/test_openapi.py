@@ -47,6 +47,18 @@ def test_docs_describe_the_404_of_a_document_with_the_common_error_body(
         assert schema["$ref"].endswith("/ErrorResponse"), status
 
 
+def test_docs_describe_the_422_of_the_list_and_its_filters(offline_client: TestClient):
+    spec = offline_client.get("/openapi.json").json()
+
+    operation = spec["paths"]["/api/v1/documents"]["get"]
+    schema = operation["responses"]["422"]["content"]["application/json"]["schema"]
+    assert schema["$ref"].endswith("/ErrorResponse")
+    parameters = {parameter["name"]: parameter for parameter in operation["parameters"]}
+    assert set(parameters) == {"type", "customer", "series", "status", "from", "to", "page", "size"}
+    # Every filter says what it does, since /docs is how a client learns them.
+    assert all("description" in parameter for parameter in parameters.values())
+
+
 def test_docs_describe_the_errors_of_a_delivery_note_with_the_common_error_body(
     offline_client: TestClient,
 ):

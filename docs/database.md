@@ -50,7 +50,7 @@ Compose pasa `DATABASE_URL` con el formato `postgresql://...`. SQLAlchemy lo aso
 
 ## Modelo de datos
 
-Pedidos, albaranes y facturas comparten una sola tabla, porque el contrato de la API los trata como un único recurso (`/documents`). Cada documento apunta al anterior de la cadena mediante `parent_id`. Hoy se crean pedidos (CU-1), albaranes (CU-2) y facturas (CU-3), y se consultan por su identificador (CU-4).
+Pedidos, albaranes y facturas comparten una sola tabla, porque el contrato de la API los trata como un único recurso (`/documents`). Cada documento apunta al anterior de la cadena mediante `parent_id`. Hoy se crean pedidos (CU-1), albaranes (CU-2) y facturas (CU-3), y se consultan por su identificador (CU-4) o en un listado con filtros (CU-5).
 
 ```mermaid
 erDiagram
@@ -98,10 +98,10 @@ La cadena de documentos se forma con `parent_id`: el albarán (CU-2) apunta a su
 |---|---|---|
 | `id` | `UUID` | Clave primaria, la asigna el servidor |
 | `type` | `VARCHAR(20)` | `ORDER`, `DELIVERY_NOTE` o `INVOICE`. Indexada |
-| `series` | `VARCHAR(10)` | `P` para los pedidos, `A` para los albaranes y `F` para las facturas |
+| `series` | `VARCHAR(10)` | `P` para los pedidos, `A` para los albaranes y `F` para las facturas. Indexada |
 | `number` | `VARCHAR(40)` | **Único**, como `P-2026-000001`, `A-2026-000001` o `F-2026-000001` |
-| `status` | `VARCHAR(20)` | `ISSUED` por ahora |
-| `issue_date` | `DATE` | La pone el servidor con la fecha de hoy |
+| `status` | `VARCHAR(20)` | `ISSUED` por ahora. Indexada |
+| `issue_date` | `DATE` | La pone el servidor con la fecha de hoy. Indexada, junto con `number` |
 | `customer_name` | `VARCHAR(200)` | Nombre del cliente |
 | `customer_tax_id` | `VARCHAR(20)` | NIF/CIF del cliente. Indexada |
 | `total_net`, `total_vat`, `total` | `NUMERIC(12,2)` | Los calcula el servidor |
@@ -167,6 +167,16 @@ Un albarán se factura una sola vez, y esa regla se protege con dos defensas:
 2. **La base de datos** tiene un índice único parcial sobre `parent_id` que solo afecta a las facturas (`WHERE type = 'INVOICE'`), creado por la migración `0004`. Es la última defensa: aunque dos peticiones se saltaran la comprobación, la segunda factura se rechazaría. Es parcial porque varios albaranes sí pueden tener el mismo pedido como padre.
 
 La numeración de las facturas es correlativa y sin huecos por la misma razón que la de los pedidos: el contador de la serie `F` se actualiza dentro de la transacción de la factura, y si esta falla, el *rollback* devuelve el número. Una petición rechazada no consume número.
+
+### El listado de documentos
+
+`GET /api/v1/documents` (CU-5) filtra por `type`, `series`, `status`, `issue_date` y cliente, y las migraciones `0005` y `0006` indexan las columnas que no lo tenían (`type` y `customer_tax_id` ya lo tenían). `status` solo tiene hoy el valor `ISSUED`, así que su índice no acelera nada todavía: se crea ya para que lo aproveche cuando haya más estados (la anulación de CU-6 añadirá uno).
+
+- **El orden y las fechas** los sirve un solo índice compuesto sobre `(issue_date, number)`. Un índice *btree* se recorre igual hacia delante que hacia atrás, así que sirve para `ORDER BY issue_date DESC, number DESC`: la base de datos lee las filas ya en orden, sin ordenarlas, y el filtro por `from` y `to` cae sobre su primera columna. Sustituye al índice solo de `issue_date` que creó la `0005`, que quedaba cubierto por este. Se midió con 300.000 documentos: la última página tardaba 270 ms con el índice de la fecha sola (ordenaba por número los empates de cada día) y 52 ms con el compuesto, y la primera pasó de 0,32 ms a 0,09 ms. La última página sigue siendo la más lenta porque el `OFFSET` obliga a recorrer y descartar las filas anteriores (ver las limitaciones de [`docs/arquitectura.md`](arquitectura.md)).
+
+- **El cliente** se filtra con un solo parámetro: el texto es el NIF/CIF exacto (que usa el índice) o parte del nombre, sin distinguir mayúsculas (`ILIKE '%texto%'`). Esa búsqueda por nombre no puede usar un índice normal, así que recorre la tabla. Con pocos documentos no importa; con muchos, el remedio sería un índice `pg_trgm`. El texto del cliente se escapa, para que un `%` o un `_` escritos por el cliente busquen ese carácter y no actúen como comodines de `LIKE`.
+- **El orden** es fecha de emisión descendente y número descendente. El número es único, así que desempata siempre igual: sin él, dos documentos del mismo día podrían cambiar de página entre dos peticiones.
+- **La página** se calcula con `LIMIT` y `OFFSET`, y `total` con un `COUNT(*)` de los mismos filtros. Son dos consultas por petición, sin depender del tamaño de la página, y no se cargan las líneas del listado. Un test cuenta las consultas y falla si crecen.
 
 El esquema (`documents`) está escrito en las migraciones, porque Alembic lo fija al autogenerarlas.
 
@@ -335,7 +345,7 @@ Los nombres de fichero deben ser únicos en todo `tests/`, porque las carpetas n
 ## Limitaciones conocidas
 
 - Los tres servicios usan la base de datos con el mismo patrón.
-- La primera migración (`0001`) está vacía: marca el punto de partida del historial. Las tablas llegan con las historias de usuario: `0002` crea las de los documentos (CU-1) y `0003` añade `source_line_id` a las líneas (CU-2) y `0004` el índice de una factura por albarán (CU-3).
+- La primera migración (`0001`) está vacía: marca el punto de partida del historial. Las tablas llegan con las historias de usuario: `0002` crea las de los documentos (CU-1) y `0003` añade `source_line_id` a las líneas (CU-2) y `0004` el índice de una factura por albarán (CU-3) y `0005` y `0006` los índices del listado (CU-5).
 - Un número solo se devuelve con un *rollback*. Si se anula un documento ya guardado, su número no se reutiliza, que es lo esperado en una numeración fiscal. Lo trata CU-6.
 - Las migraciones se aplican en cada arranque y no hay una marcha atrás automática. Una migración que falla a la mitad deja el contenedor reiniciándose hasta que se corrige.
 - `GET /health` falla cuando la base de datos no responde. Separar la comprobación de que el proceso está vivo de la de que está listo para atender se aborda en el hito de observabilidad.

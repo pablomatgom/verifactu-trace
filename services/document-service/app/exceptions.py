@@ -40,6 +40,12 @@ class DeliveryNoteAlreadyInvoiced(DomainError):
     code = "DELIVERY_NOTE_ALREADY_INVOICED"
 
 
+class InvalidDateRange(DomainError):
+    """The list is asked for documents from a date that is later than its end date."""
+
+    code = "INVALID_DATE_RANGE"
+
+
 class QuantityExceeded(DomainError):
     """The delivered quantity of an order line would be greater than the ordered one."""
 
