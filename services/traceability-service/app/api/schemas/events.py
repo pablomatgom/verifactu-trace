@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any
 
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field
@@ -71,4 +71,22 @@ class ChainVerificationRead(BaseModel):
     events_checked: int = Field(description="Number of events in the chain of the document.")
     first_invalid_sequence: int | None = Field(
         description="`sequence` of the first event that does not hold, or null if the chain is valid."
+    )
+
+
+class ChainDocument(BaseModel):
+    """One document of a documentary chain."""
+
+    type: str = Field(description="Kind of document: ORDER, DELIVERY_NOTE or INVOICE.")
+    id: uuid.UUID = Field(description="Id of the document.")
+    number: str = Field(description="Unique number of the document, as F-2026-000001.")
+    issue_date: date = Field(description="Date the document was registered or issued.")
+
+
+class DocumentChainRead(BaseModel):
+    """The documents behind an invoice, from the order it started with to the invoice itself."""
+
+    invoice_id: uuid.UUID = Field(description="Id of the invoice the chain was asked for.")
+    chain: list[ChainDocument] = Field(
+        description="The order, the delivery note and the invoice, in that order."
     )

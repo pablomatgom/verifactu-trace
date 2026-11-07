@@ -61,6 +61,8 @@ services:
       DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
       DATABASE_SCHEMA: traceability
       REDIS_URL: redis://redis:6379/0
+      # Where the documents of a chain are asked for (CU-11).
+      DOCUMENT_SERVICE_URL: http://document-service:8001
     ports:
       - "127.0.0.1:8002:8002"
     networks:
