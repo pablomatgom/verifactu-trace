@@ -50,3 +50,12 @@ class EventRead(BaseModel):
     hash: str = Field(
         description="SHA-256 of the canonical content of this event followed by `previous_hash`."
     )
+
+
+class EventHistory(BaseModel):
+    """Every event of a document, in the order of its chain."""
+
+    document_id: uuid.UUID = Field(description="Id of the document the events are about.")
+    events: list[EventRead] = Field(
+        description="The events, ordered by `sequence`: the first thing that happened first."
+    )

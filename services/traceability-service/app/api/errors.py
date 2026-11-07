@@ -3,6 +3,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
 from app.api.schemas.common import ErrorBody, ErrorResponse
+from app.exceptions import DomainError
 
 
 def _describe(error: dict) -> str:
@@ -27,6 +28,13 @@ def validation_error_handler(request: Request, exc: RequestValidationError) -> J
     return JSONResponse(status_code=422, content=body.model_dump())
 
 
+def domain_error_handler(request: Request, exc: DomainError) -> JSONResponse:
+    """Answer a business rule error with the common error body and the status of the error."""
+    body = ErrorResponse(error=ErrorBody(code=exc.code, message=exc.message))
+    return JSONResponse(status_code=exc.status_code, content=body.model_dump())
+
+
 def register_error_handlers(app: FastAPI) -> None:
     """Register the error handlers for the FastAPI app."""
     app.add_exception_handler(RequestValidationError, validation_error_handler)
+    app.add_exception_handler(DomainError, domain_error_handler)

@@ -30,6 +30,19 @@ def get_last(session: Session, document_id: uuid.UUID) -> TraceEvent | None:
     return session.scalars(query).first()
 
 
+def list_by_document(session: Session, document_id: uuid.UUID) -> list[TraceEvent]:
+    """Every event of the document, in the order of its chain (sequence 1 first).
+
+    The unique index on (document_id, sequence) finds them already in that order.
+    """
+    query = (
+        select(TraceEvent)
+        .where(TraceEvent.document_id == document_id)
+        .order_by(TraceEvent.sequence)
+    )
+    return list(session.scalars(query))
+
+
 def get_by_source_message(session: Session, source_message_id: str) -> TraceEvent | None:
     """The event recorded from a Redis stream entry, or None if that entry was not recorded."""
     query = select(TraceEvent).where(TraceEvent.source_message_id == source_message_id)
