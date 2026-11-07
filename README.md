@@ -441,7 +441,7 @@ Los documentos se ordenan por fecha de emisión descendente y, dentro del mismo 
 | Método | Ruta | Descripción | CU | Respuestas |
 |---|---|---|---|---|
 | `POST` | `/api/v1/traceability/events` | Registra un evento con su hash encadenado. **Interno**: se alimenta de la cola y no se publica en el gateway | CU-9 | `201`, `422` |
-| `GET` | `/api/v1/traceability/documents/{id}/verification` | Verifica la integridad de la cadena de registros | CU-10 | `200`, `404` |
+| `GET` | `/api/v1/traceability/documents/{id}/verification` | Verifica la integridad de la cadena de registros | CU-10 | `200`, `404`, `422` |
 | `GET` | `/api/v1/traceability/documents/{id}/chain` | Devuelve la cadena documental (pedido → albarán → factura) | CU-11 | `200`, `404` |
 | `GET` | `/api/v1/traceability/documents/{id}/events` | Devuelve el histórico de eventos de un documento | CU-12 | `200`, `404`, `422` |
 
@@ -490,6 +490,47 @@ Solo `document_id` y `event_type` son obligatorios. `occurred_at` (con zona hora
 - Si una entrada se entrega dos veces, el evento no se duplica: guarda el identificador de la entrada (`source_message_id`) y lo reconoce.
 - Si el servicio estuvo parado, registra al volver las facturas emitidas mientras tanto, porque el grupo empieza en el principio del *stream*.
 - Una entrada mal formada (sin campos o con valores ilegibles) se descarta con un error en el log para no bloquear las siguientes.
+
+#### `GET /api/v1/traceability/documents/{id}/verification` (CU-10)
+
+Verifica que nadie ha manipulado los eventos de un documento. Recalcula la cadena de hashes **en orden, desde el primer evento**, y la compara con lo que hay guardado. La consulta no modifica nada.
+
+Respuesta `200` con la cadena intacta:
+
+```json
+{
+  "document_id": "5d2e8a6c-1f40-4b9a-9c77-3e0a6b4d1f52",
+  "valid": true,
+  "events_checked": 3,
+  "first_invalid_sequence": null
+}
+```
+
+Con un evento alterado, `valid` es `false` e indica dónde se rompe la cadena:
+
+```json
+{
+  "document_id": "5d2e8a6c-1f40-4b9a-9c77-3e0a6b4d1f52",
+  "valid": false,
+  "events_checked": 3,
+  "first_invalid_sequence": 2
+}
+```
+
+Un evento falla si no cumple alguna de estas tres comprobaciones:
+
+1. **Su `sequence` es la que sigue al evento anterior** (el primero, 1). Detecta un evento borrado de la mitad aunque se hayan recalculado los hashes de los siguientes.
+2. **Su `previous_hash` es el `hash` guardado del evento anterior** (el primero, 64 ceros). Detecta un evento sustituido: el siguiente seguía encadenado al original.
+3. **Su `hash` coincide con el SHA-256 recalculado** del contenido del evento y su `previous_hash`. Detecta que se cambiaron sus datos (`event_type`, `occurred_at` o `payload`) o el propio `hash`.
+
+`first_invalid_sequence` es la `sequence` del **primer** evento que falla. Los siguientes no se señalan, porque dejan de ser fiables en cuanto se rompe un eslabón. Cada evento se compara con el hash *guardado* de su vecino, no con uno recalculado, así que un evento alterado se señala en su propia posición y no en la siguiente. Si se borra un evento de la mitad, se señala el que venía detrás. `events_checked` es el número de eventos de la cadena del documento.
+
+| Respuesta | Código | Cuándo |
+|---|---|---|
+| `404` | `EVENTS_NOT_FOUND` | El documento no tiene ningún evento |
+| `422` | `VALIDATION_ERROR` | El identificador no es un UUID |
+
+**Qué no detecta.** La cadena detecta manipulaciones, no las impide: la base de datos acepta un `UPDATE`, y la verificación lo descubre después. Tampoco puede detectar que se **borren los últimos eventos**, ni que se **reescriba el último** recalculando su hash, porque ningún evento posterior responde por ellos. Para eso haría falta guardar el último hash fuera de esta base de datos (en un servicio externo, o publicado). Está en las limitaciones de [`docs/arquitectura.md`](docs/arquitectura.md).
 
 #### `GET /api/v1/traceability/documents/{id}/events` (CU-12)
 
@@ -610,7 +651,7 @@ Para ver los reintentos, por ejemplo, con `AEAT_SIMULATION=flaky` en `.env`, `do
 **Verificar la integridad** (`GET /api/v1/traceability/documents/{id}/verification`):
 
 ```json
-{ "documentId": "5d2e8a6c-...", "valid": true, "eventsChecked": 3, "firstInvalidSequence": null }
+{ "document_id": "5d2e8a6c-...", "valid": true, "events_checked": 3, "first_invalid_sequence": null }
 ```
 
 **Estado de un envío** (`GET /api/v1/submissions/{id}`):
