@@ -77,7 +77,10 @@ class Document(Base):
         # The columns the list of documents (CU-5) filters by.
         Index("ix_documents_series", "series"),
         Index("ix_documents_status", "status"),
-        Index("ix_documents_issue_date", "issue_date"),
+        # The list is ordered by date and then number, newest first. A btree is read backwards just
+        # as well as forwards, so this one gives the order without sorting, and it also serves the
+        # filters by date, which fall on its first column.
+        Index("ix_documents_issue_date_number", "issue_date", "number"),
         # A delivery note is invoiced once. The service checks it, and this is the last defence:
         # even if two requests got past the check, the database would reject the second invoice.
         Index(
