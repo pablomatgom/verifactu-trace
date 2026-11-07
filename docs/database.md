@@ -199,7 +199,7 @@ El esquema (`documents`) está escrito en las migraciones, porque Alembic lo fij
 
 Restricciones:
 
-- `UNIQUE (document_id, sequence)`: la cadena de un documento no tiene huecos ni posiciones repetidas. Su índice sirve también para las consultas por documento.
+- `UNIQUE (document_id, sequence)`: la cadena de un documento no tiene huecos ni posiciones repetidas. Su índice sirve también para las consultas por documento, como el histórico de un documento (CU-12), que lee sus eventos por este índice y los pide ordenados por `sequence` de forma explícita.
 - `UNIQUE (source_message_id)`: una entrada del *stream* entregada dos veces no se registra dos veces.
 - `sequence >= 1` y longitud 64 para los dos hashes.
 
