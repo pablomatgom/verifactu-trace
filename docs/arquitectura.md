@@ -99,6 +99,7 @@ Una petición con el formato correcto que rompe una regla (un pedido que no exis
 | `ReferenceNotFound` | `REFERENCE_NOT_FOUND` | `404` |
 | `DocumentNotFound` | `DOCUMENT_NOT_FOUND` | `404` |
 | `InvalidOrderLine` | `INVALID_ORDER_LINE` | `422` |
+| `InvalidDateRange` | `INVALID_DATE_RANGE` | `422` |
 | `QuantityExceeded` | `QUANTITY_EXCEEDED` | `422` |
 | `DeliveryNoteAlreadyInvoiced` | `DELIVERY_NOTE_ALREADY_INVOICED` | `422` |
 
@@ -153,8 +154,9 @@ FastAPI documenta por defecto el `422` con su propio formato (`{"detail": [...]}
 
 ## Limitaciones conocidas
 
-- Los tres servicios tienen ya las capas con la estructura creada: `document-service` (CU-1 a CU-4), `traceability-service` (CU-9) y `submission-service` (CU-13).
+- Los tres servicios tienen ya las capas con la estructura creada: `document-service` (CU-1 a CU-5), `traceability-service` (CU-9) y `submission-service` (CU-13).
 - Los mensajes de los errores están en inglés y no se traducen.
+- **La paginación del listado usa `OFFSET`.** Es sencilla y deja saltar a cualquier página, pero la base de datos tiene que recorrer y descartar las filas anteriores, así que las páginas muy lejanas son más lentas. Además, si se crean documentos mientras un cliente recorre las páginas, los más nuevos desplazan a los demás. Una paginación por cursor (pedir "los anteriores a este número") evitaría ambas cosas, a costa de no poder saltar a una página concreta. Con el volumen de esta práctica no compensa.
 - **El evento `invoice.issued` se puede perder.** Se guarda la factura y después se publica el evento: son dos operaciones en sistemas distintos y no pueden ser atómicas. Si el proceso cae o Redis falla entre las dos, la factura existe y los demás servicios no se enteran. La solución habitual es un *outbox transaccional*: guardar el evento en una tabla dentro de la misma transacción que la factura y que otro proceso lo publique. No está hecho en este hito. Mientras tanto, el fallo se registra en el log y se puede detectar.
 - Hay un solo *stream* sin recorte (`XTRIM`): las entradas se quedan aunque ya estén confirmadas. La política de retención queda pendiente, y habrá que decidirla sabiendo que lo leen dos grupos (trazabilidad y envío), para no recortar entradas que un grupo todavía no ha confirmado.
 - Una entrada ilegible se descarta, no se guarda en una cola de entradas fallidas (*dead letter*). Queda registrada en el log.
