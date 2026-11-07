@@ -74,6 +74,10 @@ class Document(Base):
     __table_args__ = (
         Index("ix_documents_type", "type"),
         Index("ix_documents_customer_tax_id", "customer_tax_id"),
+        # The columns the list of documents (CU-5) filters by.
+        Index("ix_documents_series", "series"),
+        Index("ix_documents_status", "status"),
+        Index("ix_documents_issue_date", "issue_date"),
         # A delivery note is invoiced once. The service checks it, and this is the last defence:
         # even if two requests got past the check, the database would reject the second invoice.
         Index(

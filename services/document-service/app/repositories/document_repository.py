@@ -1,10 +1,12 @@
 import uuid
+from dataclasses import dataclass
+from datetime import date
 from decimal import Decimal
 
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session, selectinload
 
-from app.models import Document, DocumentLine, DocumentType
+from app.models import Document, DocumentLine, DocumentStatus, DocumentType
 
 
 def add(session: Session, document: Document) -> Document:
@@ -16,6 +18,61 @@ def add(session: Session, document: Document) -> Document:
     session.add(document)
     session.flush()
     return document
+
+
+@dataclass
+class DocumentFilters:
+    """What the list of documents is narrowed by. A filter left as None does not narrow."""
+
+    type: DocumentType | None = None
+    # Text that is the tax id of the customer, or part of the name.
+    customer: str | None = None
+    series: str | None = None
+    status: DocumentStatus | None = None
+    # Both ends are included.
+    date_from: date | None = None
+    date_to: date | None = None
+
+
+def search(
+    session: Session, filters: DocumentFilters, offset: int, limit: int
+) -> tuple[list[Document], int]:
+    """Return one page of the documents that meet the filters, and how many meet them in all.
+
+    The newest come first. The number breaks the ties, so the order is the same on every call and
+    a document cannot show up in two pages (or in none) while the client turns the pages.
+    The lines are not loaded: a list does not show them.
+    """
+    conditions = []
+    if filters.type is not None:
+        conditions.append(Document.type == filters.type)
+    if filters.series is not None:
+        conditions.append(Document.series == filters.series)
+    if filters.status is not None:
+        conditions.append(Document.status == filters.status)
+    if filters.date_from is not None:
+        conditions.append(Document.issue_date >= filters.date_from)
+    if filters.date_to is not None:
+        conditions.append(Document.issue_date <= filters.date_to)
+    if filters.customer is not None:
+        # autoescape makes a % or _ typed by the client match itself instead of acting as a
+        # wildcard of LIKE.
+        conditions.append(
+            or_(
+                Document.customer_tax_id == filters.customer,
+                Document.customer_name.icontains(filters.customer, autoescape=True),
+            )
+        )
+
+    total = session.scalar(select(func.count()).select_from(Document).where(*conditions))
+    query = (
+        select(Document)
+        .where(*conditions)
+        .order_by(Document.issue_date.desc(), Document.number.desc())
+        .offset(offset)
+        .limit(limit)
+    )
+    return list(session.scalars(query)), total or 0
 
 
 def get(session: Session, document_id: uuid.UUID) -> Document | None:
