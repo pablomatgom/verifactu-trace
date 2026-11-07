@@ -5,7 +5,9 @@ They chain: alembic_cfg -> engine -> session -> client.
 """
 
 import os
+import uuid
 from collections.abc import Iterator
+from datetime import date
 from pathlib import Path
 
 import pytest
@@ -17,6 +19,8 @@ from sqlalchemy import Engine
 from sqlalchemy.orm import Session
 
 from app.db import get_engine, get_session
+from app.documents_client import DocumentRef, get_document_client
+from app.exceptions import DocumentServiceUnavailable
 from app.main import app
 
 # services/traceability-service/, two levels above this file (tests/conftest.py).
@@ -94,4 +98,51 @@ def client(session: Session) -> Iterator[TestClient]:
     app.dependency_overrides[get_session] = lambda: session
     yield TestClient(app)
     # Remove the override so it does not leak into the next test.
+    app.dependency_overrides.clear()
+
+
+class FakeDocumentClient:
+    """Stands in for document-service: it knows the documents the test adds to it."""
+
+    def __init__(self) -> None:
+        self.documents: dict[uuid.UUID, DocumentRef] = {}
+        self.requested: list[uuid.UUID] = []
+        self.unavailable = False
+
+    def add(self, type: str, parent: DocumentRef | None = None) -> DocumentRef:
+        number = f"{type[0]}-2026-{len(self.documents) + 1:06d}"
+        document = DocumentRef(
+            id=uuid.uuid4(),
+            type=type,
+            number=number,
+            issue_date=date(2026, 10, 10 + len(self.documents)),
+            parent_id=None if parent is None else parent.id,
+        )
+        self.documents[document.id] = document
+        return document
+
+    def add_chain(self) -> tuple[DocumentRef, DocumentRef, DocumentRef]:
+        """An order, its delivery note and its invoice."""
+        order = self.add("ORDER")
+        delivery_note = self.add("DELIVERY_NOTE", order)
+        return order, delivery_note, self.add("INVOICE", delivery_note)
+
+    def get(self, document_id: uuid.UUID) -> DocumentRef | None:
+        self.requested.append(document_id)
+        if self.unavailable:
+            raise DocumentServiceUnavailable("document-service cannot be reached")
+        return self.documents.get(document_id)
+
+
+@pytest.fixture
+def documents() -> FakeDocumentClient:
+    """A document-service with no documents yet."""
+    return FakeDocumentClient()
+
+
+@pytest.fixture
+def documents_client(documents: FakeDocumentClient) -> Iterator[TestClient]:
+    """Test client whose document-service is the `documents` fake. It needs no database."""
+    app.dependency_overrides[get_document_client] = lambda: documents
+    yield TestClient(app)
     app.dependency_overrides.clear()

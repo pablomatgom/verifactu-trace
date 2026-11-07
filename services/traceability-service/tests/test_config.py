@@ -1,6 +1,6 @@
 import pytest
 
-from app.config import database_url, redis_url
+from app.config import database_url, document_service_url, redis_url
 
 # These tests need no database: they only check how the URL is built from the environment.
 # `monkeypatch` sets or removes an environment variable for the duration of one test and
@@ -42,3 +42,16 @@ def test_redis_url_is_required(monkeypatch):
 
     with pytest.raises(RuntimeError, match="REDIS_URL"):
         redis_url()
+
+
+def test_document_service_url_is_read_from_the_environment(monkeypatch):
+    monkeypatch.setenv("DOCUMENT_SERVICE_URL", "http://document-service:8001")
+
+    assert document_service_url() == "http://document-service:8001"
+
+
+def test_document_service_url_is_required(monkeypatch):
+    monkeypatch.delenv("DOCUMENT_SERVICE_URL", raising=False)
+
+    with pytest.raises(RuntimeError, match="DOCUMENT_SERVICE_URL"):
+        document_service_url()
