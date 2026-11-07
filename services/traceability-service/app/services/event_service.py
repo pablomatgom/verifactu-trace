@@ -5,6 +5,7 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
+from app.exceptions import EventsNotFound
 from app.models import TraceEvent
 from app.repositories import event_repository
 from app.services.hashing import GENESIS_HASH, canonical_content, compute_hash
@@ -18,6 +19,14 @@ class EventData:
     payload: dict[str, Any] = field(default_factory=dict)
     # Id of the Redis stream entry the event comes from, if it comes from one.
     source_message_id: str | None = None
+
+
+def get_history(session: Session, document_id: uuid.UUID) -> list[TraceEvent]:
+    """The events of a document in the order of its chain, or EventsNotFound if it has none."""
+    events = event_repository.list_by_document(session, document_id)
+    if not events:
+        raise EventsNotFound(f"document {document_id} has no events")
+    return events
 
 
 def record_event(session: Session, data: EventData) -> TraceEvent:

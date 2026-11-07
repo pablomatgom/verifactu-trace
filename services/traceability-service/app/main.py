@@ -4,7 +4,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from sqlalchemy.orm import Session
 
-from app.api import events, health
+from app.api import documents, events, health
 from app.api.errors import register_error_handlers
 from app.api.health import SERVICE_NAME
 from app.consumer import InvoiceIssuedConsumer, create_redis
@@ -30,3 +30,4 @@ register_error_handlers(app)
 
 app.include_router(health.router)
 app.include_router(events.router)
+app.include_router(documents.router)

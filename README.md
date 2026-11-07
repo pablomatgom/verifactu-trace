@@ -443,7 +443,7 @@ Los documentos se ordenan por fecha de emisión descendente y, dentro del mismo 
 | `POST` | `/api/v1/traceability/events` | Registra un evento con su hash encadenado. **Interno**: se alimenta de la cola y no se publica en el gateway | CU-9 | `201`, `422` |
 | `GET` | `/api/v1/traceability/documents/{id}/verification` | Verifica la integridad de la cadena de registros | CU-10 | `200`, `404` |
 | `GET` | `/api/v1/traceability/documents/{id}/chain` | Devuelve la cadena documental (pedido → albarán → factura) | CU-11 | `200`, `404` |
-| `GET` | `/api/v1/traceability/documents/{id}/events` | Devuelve el histórico de eventos de un documento | CU-12 | `200`, `404` |
+| `GET` | `/api/v1/traceability/documents/{id}/events` | Devuelve el histórico de eventos de un documento | CU-12 | `200`, `404`, `422` |
 
 #### `POST /api/v1/traceability/events` (CU-9)
 
@@ -490,6 +490,39 @@ Solo `document_id` y `event_type` son obligatorios. `occurred_at` (con zona hora
 - Si una entrada se entrega dos veces, el evento no se duplica: guarda el identificador de la entrada (`source_message_id`) y lo reconoce.
 - Si el servicio estuvo parado, registra al volver las facturas emitidas mientras tanto, porque el grupo empieza en el principio del *stream*.
 - Una entrada mal formada (sin campos o con valores ilegibles) se descarta con un error en el log para no bloquear las siguientes.
+
+#### `GET /api/v1/traceability/documents/{id}/events` (CU-12)
+
+Devuelve el histórico de eventos de un documento, para auditar qué le ha ocurrido y cuándo. Los eventos vienen **ordenados por `sequence`**, es decir, en el orden en que se registraron, que es el de su cadena de hashes. La consulta no modifica nada.
+
+Respuesta `200`:
+
+```json
+{
+  "document_id": "5d2e8a6c-1f40-4b9a-9c77-3e0a6b4d1f52",
+  "events": [
+    {
+      "id": "c04a8625-30b9-424d-8301-8d6185bcda4d",
+      "document_id": "5d2e8a6c-1f40-4b9a-9c77-3e0a6b4d1f52",
+      "sequence": 1,
+      "event_type": "INVOICE_ISSUED",
+      "occurred_at": "2026-10-14T09:30:00Z",
+      "payload": { "number": "F-2026-000001", "total": "380.82" },
+      "previous_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+      "hash": "0741fde33e4ee2990368a1ba86008a3ac66769e9e978b077905a9605369a4225"
+    }
+  ]
+}
+```
+
+Cada evento tiene la misma forma que la respuesta de `POST /api/v1/traceability/events`, con sus dos hashes, así que quien audita puede comprobar que cada `previous_hash` es el `hash` del evento anterior. El orden es el de `sequence` y no el de `occurred_at`: un evento puede decir que ocurrió antes que otro que se registró antes. La lista no está paginada, porque la cadena de un documento tiene pocos eventos.
+
+| Respuesta | Código | Cuándo |
+|---|---|---|
+| `404` | `EVENTS_NOT_FOUND` | El documento no tiene ningún evento |
+| `422` | `VALIDATION_ERROR` | El identificador no es un UUID |
+
+Un documento que no existe y uno al que todavía no le ha ocurrido nada responden lo mismo (`404`). `traceability-service` no guarda los documentos, solo los eventos que se refieren a ellos, así que no puede distinguirlos. Un documento recién creado, por ejemplo un pedido o un albarán, no tiene eventos hasta que se registra uno: de momento solo las facturas generan el evento `INVOICE_ISSUED`.
 
 ### submission-service
 
