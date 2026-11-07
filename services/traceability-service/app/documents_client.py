@@ -10,7 +10,7 @@ import uuid
 from dataclasses import dataclass
 from datetime import date
 from typing import Protocol
-from urllib.error import HTTPError, URLError
+from urllib.error import HTTPError
 from urllib.request import urlopen
 
 from app.config import document_service_url
@@ -64,9 +64,9 @@ class HttpDocumentClient:
             raise DocumentServiceUnavailable(
                 f"document-service answered {error.code} to the request for {document_id}"
             ) from None
-        except (URLError, OSError):
-            # URLError covers a refused connection and a name that does not resolve; OSError, a
-            # timeout or a connection that drops half way.
+        except OSError:
+            # URLError is an OSError: it covers a refused connection and a name that does not
+            # resolve. The rest is a timeout or a connection that drops half way.
             raise DocumentServiceUnavailable("document-service cannot be reached") from None
         except ValueError:
             raise DocumentServiceUnavailable("document-service sent an unreadable body") from None

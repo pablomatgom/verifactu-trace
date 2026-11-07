@@ -151,8 +151,10 @@ def test_a_service_that_is_down_means_it_is_unavailable():
         probe.bind(("127.0.0.1", 0))
         port = probe.getsockname()[1]
 
+    client = HttpDocumentClient(f"http://127.0.0.1:{port}", timeout=2)
+
     with pytest.raises(DocumentServiceUnavailable, match="cannot be reached"):
-        HttpDocumentClient(f"http://127.0.0.1:{port}", timeout=2).get(DOCUMENT_ID)
+        client.get(DOCUMENT_ID)
 
 
 def test_a_service_that_does_not_answer_in_time_means_it_is_unavailable():
@@ -162,5 +164,7 @@ def test_a_service_that_does_not_answer_in_time_means_it_is_unavailable():
         silent.listen(1)
         port = silent.getsockname()[1]
 
+        client = HttpDocumentClient(f"http://127.0.0.1:{port}", timeout=0.3)
+
         with pytest.raises(DocumentServiceUnavailable, match="cannot be reached"):
-            HttpDocumentClient(f"http://127.0.0.1:{port}", timeout=0.3).get(DOCUMENT_ID)
+            client.get(DOCUMENT_ID)
