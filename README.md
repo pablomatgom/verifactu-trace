@@ -594,8 +594,8 @@ Un documento que no existe y uno al que todavía no le ha ocurrido nada responde
 | Método | Ruta | Descripción | CU | Respuestas |
 |---|---|---|---|---|
 | `POST` | `/api/v1/submissions` | Solicita el envío de una factura a la AEAT simulada | CU-13 | `202`, `409`, `422` |
-| `GET` | `/api/v1/submissions/{id}` | Consulta el estado de un envío | CU-14 | `200`, `404` |
-| `GET` | `/api/v1/submissions` | Lista envíos. Filtros: `invoiceId`, `status` | CU-14, CU-16 (extra) | `200` |
+| `GET` | `/api/v1/submissions/{id}` | Consulta el estado de un envío | CU-14 | `200`, `404`, `422` |
+| `GET` | `/api/v1/submissions` | Lista envíos. Filtros: `invoice_id` (obligatorio por ahora), `status` (CU-16) | CU-14, CU-16 (extra) | `200`, `422` |
 | `POST` | `/api/v1/submissions/{id}/retry` | Reintenta manualmente un envío fallido o rechazado | CU-15 (extra) | `202`, `404`, `409` |
 
 Normalmente el envío se dispara solo al recibir el evento `invoice.issued`. `POST /api/v1/submissions` permite lanzarlo manualmente.
@@ -655,7 +655,7 @@ PENDING ──► SENT ──► ACCEPTED
 | `SUBMISSION_MAX_ATTEMPTS` | `5` | Intentos antes de pasar a `FAILED` |
 | `SUBMISSION_RETRY_BASE_SECONDS` | `5` | Espera tras el primer fallo; se duplica después |
 
-Para ver los reintentos, por ejemplo, con `AEAT_SIMULATION=flaky` en `.env`, `docker compose up -d submission-service` y emitir facturas. Todavía no hay una consulta del estado de un envío (CU-14), así que se mira en la base de datos: `SELECT status, attempts, last_error FROM submissions.submissions`.
+Para ver los reintentos, por ejemplo, con `AEAT_SIMULATION=flaky` en `.env`, `docker compose up -d submission-service` y emitir facturas. El estado se consulta con `GET /api/v1/submissions/{id}` o `GET /api/v1/submissions?invoice_id=` (CU-14).
 
 ### Ejemplos
 
@@ -683,11 +683,13 @@ Para ver los reintentos, por ejemplo, con `AEAT_SIMULATION=flaky` en `.env`, `do
 ```json
 {
   "id": "c8f4a1d0-...",
-  "invoiceId": "5d2e8a6c-...",
+  "invoice_id": "5d2e8a6c-...",
+  "invoice_number": "F-2026-000001",
   "status": "RETRYING",
   "attempts": 2,
-  "nextAttemptAt": "2026-10-14T09:34:00Z",
-  "lastError": "AEAT_UNAVAILABLE"
+  "next_attempt_at": "2026-10-14T09:34:00Z",
+  "last_error": "AEAT_UNAVAILABLE",
+  "aeat_reference": null
 }
 ```
 
