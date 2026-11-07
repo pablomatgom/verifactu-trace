@@ -19,3 +19,10 @@ class SubmissionAlreadyExists(DomainError):
 
     code = "SUBMISSION_ALREADY_EXISTS"
     status_code = 409
+
+
+class SubmissionNotFound(DomainError):
+    """There is no submission with that id."""
+
+    code = "SUBMISSION_NOT_FOUND"
+    status_code = 404

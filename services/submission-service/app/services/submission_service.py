@@ -5,7 +5,7 @@ from datetime import UTC, datetime, timedelta
 from sqlalchemy.orm import Session
 
 from app.aeat import AeatClient, AeatOutcome
-from app.exceptions import SubmissionAlreadyExists
+from app.exceptions import SubmissionAlreadyExists, SubmissionNotFound
 from app.models import Submission, SubmissionStatus
 from app.repositories import submission_repository
 from app.services.retry import RetryPolicy
@@ -40,6 +40,19 @@ def create_submission(
         raise SubmissionAlreadyExists(f"invoice {data.invoice_id} already has a submission")
     session.commit()
     return submission
+
+
+def get_submission(session: Session, submission_id: uuid.UUID) -> Submission:
+    """The submission, or SubmissionNotFound if there is none with that id."""
+    submission = submission_repository.get(session, submission_id)
+    if submission is None:
+        raise SubmissionNotFound(f"submission {submission_id} does not exist")
+    return submission
+
+
+def list_by_invoice(session: Session, invoice_id: uuid.UUID) -> list[Submission]:
+    """The submissions of an invoice. It is empty if the invoice has none."""
+    return submission_repository.list_by_invoice(session, invoice_id)
 
 
 def claim_due(

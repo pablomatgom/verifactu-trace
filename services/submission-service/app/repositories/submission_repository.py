@@ -65,3 +65,9 @@ def claim_due(
         .with_for_update(skip_locked=True)
     )
     return list(session.scalars(query))
+
+
+def list_by_invoice(session: Session, invoice_id: uuid.UUID) -> list[Submission]:
+    """The submissions of an invoice: one at most, as the table allows one per invoice."""
+    query = select(Submission).where(Submission.invoice_id == invoice_id)
+    return list(session.scalars(query))

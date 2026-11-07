@@ -41,3 +41,9 @@ class SubmissionRead(BaseModel):
         description="Why the last attempt failed or was rejected, such as AEAT_UNAVAILABLE."
     )
     aeat_reference: str | None = Field(description="Reference the AEAT gave when it accepted it.")
+
+
+class SubmissionList(BaseModel):
+    """The submissions that meet the filter."""
+
+    items: list[SubmissionRead] = Field(description="The submissions. Empty if there are none.")
