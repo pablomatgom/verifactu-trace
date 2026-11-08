@@ -596,7 +596,7 @@ Un documento que no existe y uno al que todavía no le ha ocurrido nada responde
 | `POST` | `/api/v1/submissions` | Solicita el envío de una factura a la AEAT simulada | CU-13 | `202`, `409`, `422` |
 | `GET` | `/api/v1/submissions/{id}` | Consulta el estado de un envío | CU-14 | `200`, `404`, `422` |
 | `GET` | `/api/v1/submissions` | Lista envíos paginados. Filtros: `invoice_id`, `status` | CU-14, CU-16 (extra) | `200`, `422` |
-| `POST` | `/api/v1/submissions/{id}/retry` | Reintenta manualmente un envío fallido o rechazado | CU-15 (extra) | `202`, `404`, `409` |
+| `POST` | `/api/v1/submissions/{id}/retry` | Reintenta manualmente un envío fallido o rechazado | CU-15 (extra) | `202`, `404`, `409`, `422` |
 
 Normalmente el envío se dispara solo al recibir el evento `invoice.issued`. `POST /api/v1/submissions` permite lanzarlo manualmente.
 
@@ -643,7 +643,7 @@ PENDING ──► SENT ──► ACCEPTED
 
 - `SENT` significa que hay un intento en curso. Cada intento incrementa `attempts`.
 - Si la AEAT no responde, el envío pasa a `RETRYING` y se reintenta con una **espera creciente**: el doble tras cada fallo (5, 10, 20, 40 segundos con los valores por defecto, con un máximo de una hora). Tras el último intento fallido pasa a `FAILED`. El último error queda en `last_error`.
-- Si la AEAT rechaza la factura, no se reintenta: enviarla otra vez daría la misma respuesta.
+- Si la AEAT rechaza la factura, no se reintenta solo: enviarla otra vez daría la misma respuesta. Una vez corregido el motivo, un `REJECTED` o un `FAILED` se puede reenviar a mano (CU-15).
 - Los reintentos se guardan en la base de datos (`next_attempt_at`), no en memoria, así que sobreviven a un reinicio y cualquier réplica puede hacerlos. Un envío que lleva un minuto en `SENT` sin respuesta (el servicio cayó mientras lo enviaba) se da por perdido y se vuelve a enviar.
 
 **AEAT simulada.** El servicio habla con la AEAT a través de una interfaz (`AeatClient`), y la implementación actual es una simulación dentro del propio servicio. Se elige con variables de entorno, que `compose.yaml` pasa al contenedor (se cambian en `.env`):
@@ -727,6 +727,37 @@ Respuesta `200`, con los envíos más recientes primero:
 | `422` | `VALIDATION_ERROR` | `invoice_id` no es un UUID, `status` no es uno de los estados, `page` es menor que 1 o `size` está fuera de 1 a 100 |
 
 La paginación usa `OFFSET`, con la limitación que se explica en [`docs/arquitectura.md`](docs/arquitectura.md).
+
+#### `POST /api/v1/submissions/{id}/retry` (CU-15)
+
+Envía otra vez un envío que no llegó a buen puerto, por ejemplo cuando se ha corregido la causa del fallo. No lleva cuerpo.
+
+Responde `202` porque la factura **todavía no se ha enviado**: el envío vuelve a `PENDING` con los intentos a cero y el proceso en segundo plano lo envía, como a cualquier otro. Para ver cómo acaba se consulta con `GET /api/v1/submissions/{id}` (CU-14).
+
+```json
+{
+  "id": "c8f4a1d0-7e22-4b0c-9d51-6a3e8f2b1c04",
+  "invoice_id": "5d2e8a6c-1f40-4b9a-9c77-3e0a6b4d1f52",
+  "invoice_number": "F-2026-000001",
+  "status": "PENDING",
+  "attempts": 0,
+  "next_attempt_at": "2026-10-14T10:15:00.123456Z",
+  "last_error": "AEAT_UNAVAILABLE",
+  "aeat_reference": null
+}
+```
+
+Solo se puede reintentar un envío **`FAILED`** (se agotaron los intentos) o **`REJECTED`** (la AEAT lo rechazó, y merece la pena reenviarlo una vez corregido el motivo). Uno `ACCEPTED` no se reenvía, para no enviar dos veces la misma factura, y uno `PENDING`, `SENT` o `RETRYING` ya está en marcha.
+
+- Los intentos **empiezan de nuevo**, para que el reintento tenga un juego completo: con la cuenta anterior, un envío que agotó sus intentos volvería a `FAILED` tras un solo fallo.
+- `last_error` se **conserva** hasta que el siguiente intento responda, para que no se pierda por qué se había parado. Si la AEAT lo acepta, se borra.
+- Dos peticiones a la vez sobre el mismo envío no lo reenvían dos veces: se bloquea la fila, así que la segunda espera y ve que ya está `PENDING`, y recibe `409`.
+
+| Respuesta | Código | Cuándo |
+|---|---|---|
+| `404` | `SUBMISSION_NOT_FOUND` | No existe un envío con ese id |
+| `409` | `SUBMISSION_NOT_RETRYABLE` | El envío no está `FAILED` ni `REJECTED`. El mensaje dice en qué estado está |
+| `422` | `VALIDATION_ERROR` | El id no es un UUID |
 
 ### Ejemplos
 
