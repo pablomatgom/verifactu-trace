@@ -1,0 +1,72 @@
+# Evidencia: ejecuciones de los workflows de GitHub Actions
+# Obtenido con `gh run list` y `gh run view` (API de GitHub) el 2026-11-08.
+# Cualquiera puede comprobarlo abriendo las URLs de cada ejecucion.
+
+## CI (ci.yml): lint, pruebas e integracion
+
+### Evento `push` (push a main)
+- Ejecucion: https://github.com/pablomatgom/verifactu-trace/actions/runs/42487206863
+- Commit: b4c825a | rama: main | resultado: success | 2026-11-08T13:54:52Z
+
+| Resultado | Trabajo | Duracion |
+|---|---|---|
+| success | Integration Validation (Docker Compose) | 45 s |
+| success | Test (submission-service) | 45 s |
+| success | Test (traceability-service) | 39 s |
+| success | Lint | 17 s |
+| success | Test (document-service) | 35 s |
+
+### Evento `pull_request` (pull request hacia main)
+- Ejecucion: https://github.com/pablomatgom/verifactu-trace/actions/runs/42487131863
+- Commit: 2042312 | rama: docs/close-hito2 | resultado: success | 2026-11-08T13:53:55Z
+
+| Resultado | Trabajo | Duracion |
+|---|---|---|
+| success | Lint | 13 s |
+| success | Integration Validation (Docker Compose) | 46 s |
+| success | Test (document-service) | 37 s |
+| success | Test (submission-service) | 41 s |
+| success | Test (traceability-service) | 41 s |
+
+## Docker (docker.yml): hadolint, construccion y publicacion
+
+### Evento `push` (push a main)
+- Ejecucion: https://github.com/pablomatgom/verifactu-trace/actions/runs/42487206908
+- Commit: b4c825a | rama: main | resultado: success | 2026-11-08T13:54:52Z
+
+| Resultado | Trabajo | Duracion |
+|---|---|---|
+| success | Hadolint (submission-service) | 8 s |
+| success | Hadolint (traceability-service) | 14 s |
+| success | Hadolint (document-service) | 10 s |
+| success | Build (submission-service) | 21 s |
+| success | Build (traceability-service) | 26 s |
+| success | Build (document-service) | 18 s |
+
+### Evento `pull_request` (pull request hacia main)
+- Ejecucion: https://github.com/pablomatgom/verifactu-trace/actions/runs/42487131922
+- Commit: 2042312 | rama: docs/close-hito2 | resultado: success | 2026-11-08T13:53:55Z
+
+| Resultado | Trabajo | Duracion |
+|---|---|---|
+| success | Hadolint (document-service) | 9 s |
+| success | Hadolint (traceability-service) | 12 s |
+| success | Hadolint (submission-service) | 8 s |
+| success | Build (traceability-service) | 14 s |
+| success | Build (document-service) | 21 s |
+| success | Build (submission-service) | 17 s |
+
+## Pasos del trabajo de construccion de una imagen en un push a main
+Trabajo: Build (submission-service)
+
+- success  Set up job
+- success  Run actions/checkout@v7
+- success  Run docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069
+- success  Log in to GHCR
+- success  Image metadata
+- success  Build and push
+- success  Post Build and push
+- success  Post Log in to GHCR
+- success  Post Run docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069
+- success  Post Run actions/checkout@v7
+- success  Complete job

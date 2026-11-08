@@ -1,0 +1,41 @@
+# Evidencia: el sistema completo levantado con Docker Compose desde main (b4c825a)
+
+$ docker compose ps
+NAME                                     SERVICE                STATUS                    PORTS
+verifactu-trace-document-service-1       document-service       Up 17 seconds (healthy)   127.0.0.1:8001->8001/tcp
+verifactu-trace-postgres-1               postgres               Up 2 days (healthy)       5432/tcp
+verifactu-trace-redis-1                  redis                  Up 2 days (healthy)       6379/tcp
+verifactu-trace-submission-service-1     submission-service     Up 18 seconds (healthy)   127.0.0.1:8003->8003/tcp
+verifactu-trace-traceability-service-1   traceability-service   Up 18 seconds (healthy)   127.0.0.1:8002->8002/tcp
+
+$ curl http://127.0.0.1:{8001,8002,8003}/health
+port 8001: {"status":"ok","service":"document-service"}
+port 8002: {"status":"ok","service":"traceability-service"}
+port 8003: {"status":"ok","service":"submission-service"}
+
+$ docker compose exec document-service id   # usuario sin privilegios (UID 10001)
+document-service: uid=10001(appuser) gid=10001(appgroup) groups=10001(appgroup)
+traceability-service: uid=10001(appuser) gid=10001(appgroup) groups=10001(appgroup)
+submission-service: uid=10001(appuser) gid=10001(appgroup) groups=10001(appgroup)
+
+$ docker compose exec document-service which gcc   # el compilador no esta en la imagen final
+(no gcc in the final image)
+
+$ docker image ls   # imagenes de los servicios
+REPOSITORY                             TAG         SIZE
+verifactu-trace-document-service       latest      328MB
+verifactu-trace-submission-service     latest      328MB
+verifactu-trace-traceability-service   latest      328MB
+
+$ psql: esquemas y versiones de migracion
+documents|0007
+traceability|0002
+submissions|0003
+
+$ docker volume ls   # volumenes persistentes
+verifactu-trace_postgres-data
+verifactu-trace_redis-data
+
+$ docker network ls   # redes del proyecto
+verifactu-trace_data
+verifactu-trace_edge

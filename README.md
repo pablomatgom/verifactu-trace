@@ -1041,6 +1041,7 @@ Documentación adicional del proyecto, en la carpeta [`docs/`](docs/):
 - [Capa de datos y migraciones](docs/database.md): estructura por capas de los servicios, migraciones con Alembic y tests con PostgreSQL.
 - [Integración continua](docs/ci.md): lint, tests, análisis de Dockerfiles y publicación de imágenes en GHCR.
 - [Decisiones del Hito 2](docs/hito2.md): justificación del gestor de tareas, la biblioteca de aserciones, el marco de pruebas y el sistema de CI, y qué lógica de negocio se prueba.
+- [Evidencias del Hito 2](docs/evidencias/README.md): salida de los comandos y capturas de la CI, GHCR y SonarCloud.
 
 ## Gestión del proyecto
 

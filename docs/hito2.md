@@ -196,6 +196,10 @@ El enunciado del Hito 2 pide tres entregables. Esta tabla dice dónde está cada
 
 El enunciado agrupa todo esto en un único `ci.yml`. Aquí se reparte en dos workflows: `ci.yml` valida el código (lint, pruebas e integración) y `docker.yml` valida y publica las imágenes. Los dos se lanzan con los mismos eventos y cada uno se ve como un conjunto de trabajos independiente en la pull request. Separarlos hace que un fallo de estilo en el código no oculte uno en un Dockerfile, y al revés, y mantiene cada fichero corto y centrado en una responsabilidad, con la construcción de las imágenes usando su propia caché de capas.
 
+### Evidencias
+
+La salida real de los comandos y las capturas de GitHub y SonarCloud que demuestran lo anterior están en [`evidencias/`](evidencias/README.md).
+
 ## Cómo ejecutar las pruebas
 
 ```bash
