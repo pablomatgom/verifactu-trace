@@ -192,9 +192,15 @@ El enunciado del Hito 2 pide tres entregables. Esta tabla dice dónde está cada
 | Pruebas unitarias | `pytest` de cada servicio (trabajo `test` de `ci.yml`, uno por servicio) |
 | Pruebas de integración | Con PostgreSQL y Redis reales en el trabajo `test`, y con el sistema completo en el trabajo `integration` (`docker compose up --wait`) |
 | Construcción y publicación en GHCR | Trabajo `build` de `docker.yml`: construye la imagen de cada servicio y, fuera de los pull requests, la publica en `ghcr.io/pablomatgom/verifactu-trace/<servicio>` |
-| Etiquetas con la versión o el hash del commit | `sha-<commit>` y `latest` en cada push a `main`, y la versión semántica (`1.0.0`) al subir un tag `v*` |
+| Etiquetas con la versión o el hash del commit | `sha-<commit>` y `latest` en cada push a `main`, y la versión semántica (`0.2.0`) al subir un tag `v*` |
 
 El enunciado agrupa todo esto en un único `ci.yml`. Aquí se reparte en dos workflows: `ci.yml` valida el código (lint, pruebas e integración) y `docker.yml` valida y publica las imágenes. Los dos se lanzan con los mismos eventos y cada uno se ve como un conjunto de trabajos independiente en la pull request. Separarlos hace que un fallo de estilo en el código no oculte uno en un Dockerfile, y al revés, y mantiene cada fichero corto y centrado en una responsabilidad, con la construcción de las imágenes usando su propia caché de capas.
+
+### Versión
+
+El estado entregado del hito es la versión **`v0.2.0`**, un tag anotado sobre `main`. Al subirlo, `docker.yml` publica en GHCR las imágenes `ghcr.io/pablomatgom/verifactu-trace/<servicio>:0.2.0` (y `sha-<commit>`) de los tres servicios. Las versiones siguen la numeración semántica y, mientras el proyecto no esté completo, empiezan por `0`: el Hito 2 es la `0.2.0`.
+
+El tag fija lo entregado: el trabajo posterior en `main` no lo modifica. Las evidencias se tomaron sobre el commit `b4c825a`, y los commits posteriores hasta el tag solo cambian documentación (`docs/` y `README.md`), así que el código de la versión es el que se evidencia.
 
 ### Evidencias
 

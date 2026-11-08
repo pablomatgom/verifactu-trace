@@ -5,7 +5,7 @@ Aplicación nativa de la nube para la emisión y la trazabilidad de facturación
 [![CI](https://github.com/pablomatgom/verifactu-trace/actions/workflows/ci.yml/badge.svg)](https://github.com/pablomatgom/verifactu-trace/actions/workflows/ci.yml)
 [![Docker](https://github.com/pablomatgom/verifactu-trace/actions/workflows/docker.yml/badge.svg)](https://github.com/pablomatgom/verifactu-trace/actions/workflows/docker.yml)
 
-> **Estado:** Hito 1 completado. Hito 2 (empaquetado cloud native, entorno local e integración continua) completado: los 16 casos de uso están implementados, el sistema completo se levanta con Docker Compose y el CI valida el código y publica las imágenes. Las decisiones del hito están en [`docs/hito2.md`](docs/hito2.md).
+> **Estado:** Hito 1 completado. Hito 2 (empaquetado cloud native, entorno local e integración continua) completado en la versión `v0.2.0`: los 16 casos de uso están implementados, el sistema completo se levanta con Docker Compose y el CI valida el código y publica las imágenes. Las decisiones del hito están en [`docs/hito2.md`](docs/hito2.md).
 
 ## Índice
 
@@ -1015,7 +1015,7 @@ Al mergear a `main`, o al subir un tag `v*`, `docker.yml` publica una imagen por
 |---|---|
 | `sha-<commit>` | En cada push a `main` |
 | `latest` | En cada push a `main` |
-| `1.0.0` | Al subir el tag `v1.0.0` |
+| `0.2.0` | Al subir el tag `v0.2.0` (la versión del Hito 2) |
 
 En un pull request la imagen se construye para comprobar que el Dockerfile funciona, pero **no se publica**.
 
