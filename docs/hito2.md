@@ -2,7 +2,7 @@
 
 Este documento recoge las decisiones técnicas del Hito 2 y las razones de cada una: el gestor de tareas, la biblioteca de aserciones, el marco de pruebas y el sistema de integración continua. Después explica qué lógica de negocio se prueba y cómo se ejecuta todo.
 
-El detalle de los workflows (trabajos, permisos, caché, pruebas de integración con Docker Compose y publicación de imágenes) está en [`ci.md`](ci.md). Aquí se justifica **por qué** se eligió cada herramienta frente a sus alternativas, reconociendo también sus inconvenientes.
+El detalle de los workflows (trabajos, permisos, caché, pruebas de integración con Docker Compose y publicación de imágenes) está en [`ci.md`](ci.md), y al final de este documento hay una tabla con los entregables del hito y el lugar donde se cumple cada uno. Aquí se justifica **por qué** se eligió cada herramienta frente a sus alternativas, reconociendo también sus inconvenientes.
 
 | Decisión | Elección |
 |---|---|
@@ -157,6 +157,44 @@ Reglas de negocio con pruebas propias, entre otras:
 - **Cadena documental** (CU-2, CU-3, CU-6 y CU-8): un albarán se puede entregar en partes sin superar el pedido, una factura por albarán (también a nivel de base de datos), la anulación solo de lo que no se ha facturado y las rectificativas sin devolver más de lo facturado.
 - **Reintentos** (CU-13 a CU-16): espera que se duplica, intentos agotados, envío dado por perdido, y el reenvío manual con sus intentos reiniciados.
 - **Idempotencia de los eventos:** si el *stream* entrega dos veces la misma entrada, no se registra dos veces.
+
+## Entregables del hito y dónde se cumplen
+
+El enunciado del Hito 2 pide tres entregables. Esta tabla dice dónde está cada requisito y en qué documento se explica.
+
+### Dockerfiles de producción (uno por microservicio)
+
+| Requisito | Dónde se cumple |
+|---|---|
+| Construcción multietapa | Etapas `builder` y `runtime` en `services/<servicio>/Dockerfile`. La primera instala las dependencias y la segunda solo recibe el entorno virtual y el código ([`docker.md`](docker.md)) |
+| Imagen base minimalista, fundamentada | `python:3.12-slim`, con las alternativas descartadas (`alpine`, `distroless`) y el porqué en la tabla de decisiones de [`docker.md`](docker.md) |
+| Mínimo privilegio | `appuser`, un usuario de sistema sin shell, con UID y GID `10001`, y `USER 10001:10001` en la imagen final |
+| Optimización de la caché de capas | `requirements.txt` se copia e instala antes que el código, y `.dockerignore` limita el contexto de construcción |
+| Exposición de puertos | `EXPOSE 8001`, `8002` y `8003`, y un `HEALTHCHECK` sobre `GET /health` |
+
+### Orquestación local (`compose.yaml`)
+
+| Requisito | Dónde se cumple |
+|---|---|
+| Al menos 3 contenedores | Cinco: los tres servicios, PostgreSQL y Redis ([`compose.md`](compose.md)) |
+| Redes virtuales aisladas | `edge` para los servicios y `data` (`internal: true`) para PostgreSQL y Redis |
+| Volúmenes persistentes | `postgres-data` y `redis-data` (con `--appendonly yes`) |
+| Variables de entorno desde un archivo de ejemplo | `.env.example`, sin credenciales reales; `.env` está en `.gitignore` y Compose falla con un mensaje claro si falta una variable |
+| Un único comando | `docker compose up --build`, o `make up` |
+
+### Integración continua
+
+| Requisito | Dónde se cumple |
+|---|---|
+| Eventos `push` y `pull_request` a la rama principal | `ci.yml` y `docker.yml` se activan en los dos casos ([`ci.md`](ci.md)) |
+| Linters de código | `ruff check` y `ruff format --check`, con `make lint` (trabajo `lint` de `ci.yml`) |
+| Linter de Dockerfiles | `hadolint` (trabajo `hadolint` de `docker.yml`) |
+| Pruebas unitarias | `pytest` de cada servicio (trabajo `test` de `ci.yml`, uno por servicio) |
+| Pruebas de integración | Con PostgreSQL y Redis reales en el trabajo `test`, y con el sistema completo en el trabajo `integration` (`docker compose up --wait`) |
+| Construcción y publicación en GHCR | Trabajo `build` de `docker.yml`: construye la imagen de cada servicio y, fuera de los pull requests, la publica en `ghcr.io/pablomatgom/verifactu-trace/<servicio>` |
+| Etiquetas con la versión o el hash del commit | `sha-<commit>` y `latest` en cada push a `main`, y la versión semántica (`1.0.0`) al subir un tag `v*` |
+
+El enunciado agrupa todo esto en un único `ci.yml`. Aquí se reparte en dos workflows: `ci.yml` valida el código (lint, pruebas e integración) y `docker.yml` valida y publica las imágenes. Los dos se lanzan con los mismos eventos y cada uno se ve como un conjunto de trabajos independiente en la pull request. Separarlos hace que un fallo de estilo en el código no oculte uno en un Dockerfile, y al revés, y mantiene cada fichero corto y centrado en una responsabilidad, con la construcción de las imágenes usando su propia caché de capas.
 
 ## Cómo ejecutar las pruebas
 

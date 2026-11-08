@@ -50,7 +50,7 @@ Compose pasa `DATABASE_URL` con el formato `postgresql://...`. SQLAlchemy lo aso
 
 ## Modelo de datos
 
-Pedidos, albaranes y facturas comparten una sola tabla, porque el contrato de la API los trata como un único recurso (`/documents`). Cada documento apunta al anterior de la cadena mediante `parent_id`. Hoy se crean pedidos (CU-1), albaranes (CU-2) y facturas (CU-3), y se consultan por su identificador (CU-4) o en un listado con filtros (CU-5).
+Pedidos, albaranes y facturas comparten una sola tabla, porque el contrato de la API los trata como un único recurso (`/documents`). Cada documento apunta al anterior de la cadena mediante `parent_id`. Se crean pedidos (CU-1), albaranes (CU-2), facturas (CU-3) y facturas rectificativas (CU-8), se consultan por su identificador (CU-4) o en un listado con filtros (CU-5), se anulan (CU-6) y se comparan entre sí (CU-7).
 
 ```mermaid
 erDiagram
