@@ -38,6 +38,10 @@ class Submission(Base):
         CheckConstraint("attempts >= 0", name="ck_submissions_attempts_not_negative"),
         # The worker looks for the submissions that are due, by status and date.
         Index("ix_submissions_status_next_attempt_at", "status", "next_attempt_at"),
+        # The list of submissions (CU-16) is ordered by creation, newest first, and the id
+        # breaks the ties. A btree is read backwards just as well as forwards, so this one
+        # gives the order without sorting.
+        Index("ix_submissions_created_at_id", "created_at", "id"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)

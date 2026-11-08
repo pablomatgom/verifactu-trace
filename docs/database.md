@@ -227,11 +227,12 @@ Restricciones e índices:
 
 - `UNIQUE (invoice_id)`: una factura se envía una vez, aunque su evento llegue dos veces o alguien lo pida también a mano. Es lo que hace idempotente el consumo del evento: el servicio inserta con `ON CONFLICT DO NOTHING`, y si la factura ya tenía envío, no hace nada.
 - `attempts >= 0`.
-- Índice `(status, next_attempt_at)`, para que el proceso de envío encuentre rápido los que tocan.
+- Índice `(status, next_attempt_at)`, para que el proceso de envío encuentre rápido los que tocan. También sirve al filtro por `status` del listado, porque empieza por esa columna.
+- Índice `(created_at, id)`, para el listado (CU-16). Se ordena por creación descendente y el `id` desempata, y como un índice *btree* se recorre igual hacia atrás, la base de datos lee las filas ya en orden, sin ordenarlas. El filtro por `invoice_id` lo sirve su `UNIQUE`. `total` se calcula con un `COUNT(*)` de los mismos filtros, así que cada página son dos consultas, y la paginación usa `LIMIT` y `OFFSET` como la de documentos.
 
 **Cómo se reparten los envíos entre réplicas.** El proceso de envío elige los envíos que toca intentar con `SELECT ... FOR UPDATE SKIP LOCKED`: si otra réplica ya ha bloqueado una fila, se la salta en vez de esperar. Después los marca `SENT` y confirma **antes** de llamar a la AEAT, así que otra réplica no los ve como pendientes. El test `tests/services/test_claim_concurrency.py` comprueba que una fila bloqueada por un proceso se la salta el otro; sin `SKIP LOCKED` falla.
 
-Las migraciones son `0001` (vacía) y `0002` (crea `submissions`).
+Las migraciones son `0001` (vacía), `0002` (crea `submissions`) y `0003` (el índice del listado).
 
 ## Migraciones con Alembic
 

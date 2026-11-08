@@ -595,7 +595,7 @@ Un documento que no existe y uno al que todavía no le ha ocurrido nada responde
 |---|---|---|---|---|
 | `POST` | `/api/v1/submissions` | Solicita el envío de una factura a la AEAT simulada | CU-13 | `202`, `409`, `422` |
 | `GET` | `/api/v1/submissions/{id}` | Consulta el estado de un envío | CU-14 | `200`, `404`, `422` |
-| `GET` | `/api/v1/submissions` | Lista envíos. Filtros: `invoice_id` (obligatorio por ahora), `status` (CU-16) | CU-14, CU-16 (extra) | `200`, `422` |
+| `GET` | `/api/v1/submissions` | Lista envíos paginados. Filtros: `invoice_id`, `status` | CU-14, CU-16 (extra) | `200`, `422` |
 | `POST` | `/api/v1/submissions/{id}/retry` | Reintenta manualmente un envío fallido o rechazado | CU-15 (extra) | `202`, `404`, `409` |
 
 Normalmente el envío se dispara solo al recibir el evento `invoice.issued`. `POST /api/v1/submissions` permite lanzarlo manualmente.
@@ -656,6 +656,77 @@ PENDING ──► SENT ──► ACCEPTED
 | `SUBMISSION_RETRY_BASE_SECONDS` | `5` | Espera tras el primer fallo; se duplica después |
 
 Para ver los reintentos, por ejemplo, con `AEAT_SIMULATION=flaky` en `.env`, `docker compose up -d submission-service` y emitir facturas. El estado se consulta con `GET /api/v1/submissions/{id}` o `GET /api/v1/submissions?invoice_id=` (CU-14).
+
+#### `GET /api/v1/submissions/{id}` (CU-14)
+
+Consulta dónde está el envío de una factura. Devuelve el mismo cuerpo de envío que el `POST`:
+
+```json
+{
+  "id": "c8f4a1d0-7e22-4b0c-9d51-6a3e8f2b1c04",
+  "invoice_id": "5d2e8a6c-1f40-4b9a-9c77-3e0a6b4d1f52",
+  "invoice_number": "F-2026-000001",
+  "status": "RETRYING",
+  "attempts": 2,
+  "next_attempt_at": "2026-10-14T09:34:00Z",
+  "last_error": "AEAT_UNAVAILABLE",
+  "aeat_reference": null
+}
+```
+
+Para saber si una factura llegó a la AEAT, mira `status`: `ACCEPTED` o `REJECTED` son definitivos, `PENDING`, `SENT` y `RETRYING` están en marcha (`next_attempt_at` dice cuándo se intenta de nuevo) y `FAILED` se rindió tras agotar los intentos. `last_error` guarda el motivo del último fallo o rechazo.
+
+Para buscar el envío de una **factura** sin conocer el id del envío se usa el listado con `invoice_id` (ver CU-16). Como una factura tiene un solo envío, trae un elemento o ninguno: una factura sin envío, o que no existe, recibe `"items": []` y no un `404`.
+
+| Respuesta | Código | Cuándo |
+|---|---|---|
+| `404` | `SUBMISSION_NOT_FOUND` | No existe un envío con ese id |
+| `422` | `VALIDATION_ERROR` | El id no es un UUID |
+
+#### `GET /api/v1/submissions` (CU-16)
+
+Lista los envíos, por ejemplo los pendientes o fallidos para actuar sobre las facturas que no han llegado a la AEAT. Todos los parámetros son opcionales y **los filtros se suman**.
+
+| Parámetro | Filtra por |
+|---|---|
+| `invoice_id` | La factura: devuelve su envío, si lo tiene |
+| `status` | Estado: `PENDING`, `SENT`, `ACCEPTED`, `REJECTED`, `RETRYING` o `FAILED` |
+| `page` | Número de página, desde 1 (por defecto `1`) |
+| `size` | Envíos por página, de 1 a 100 (por defecto `20`) |
+
+```
+GET /api/v1/submissions?status=FAILED&page=1&size=2
+```
+
+Respuesta `200`, con los envíos más recientes primero:
+
+```json
+{
+  "items": [
+    {
+      "id": "5dc8bcd3-fd2f-465d-ab32-ef6d76e30f58",
+      "invoice_id": "95062623-057a-46ae-a2ff-7871954df138",
+      "invoice_number": "F-2026-000004",
+      "status": "FAILED",
+      "attempts": 5,
+      "next_attempt_at": null,
+      "last_error": "AEAT_UNAVAILABLE",
+      "aeat_reference": null
+    }
+  ],
+  "page": 1,
+  "size": 2,
+  "total": 1
+}
+```
+
+`total` es el número de envíos que cumplen los filtros **en todas las páginas**, no solo en esta, para que el cliente sepa cuántas hay. Una página más allá del final devuelve `items` vacío con el mismo `total`, y un filtro que no encuentra nada, una lista vacía y no un `404`. Si dos envíos se crearon a la vez, se ordenan por su `id`, así que al pasar de página no se repite ni se salta ninguno.
+
+| Respuesta | Código | Cuándo |
+|---|---|---|
+| `422` | `VALIDATION_ERROR` | `invoice_id` no es un UUID, `status` no es uno de los estados, `page` es menor que 1 o `size` está fuera de 1 a 100 |
+
+La paginación usa `OFFSET`, con la limitación que se explica en [`docs/arquitectura.md`](docs/arquitectura.md).
 
 ### Ejemplos
 

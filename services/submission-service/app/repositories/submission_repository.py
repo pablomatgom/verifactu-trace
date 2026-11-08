@@ -1,11 +1,20 @@
 import uuid
+from dataclasses import dataclass
 from datetime import datetime
 
-from sqlalchemy import and_, or_, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
 from app.models import Submission, SubmissionStatus
+
+
+@dataclass
+class SubmissionFilters:
+    """What the list of submissions is narrowed by. A filter left as None does not narrow."""
+
+    invoice_id: uuid.UUID | None = None
+    status: SubmissionStatus | None = None
 
 
 def create_if_absent(
@@ -67,7 +76,26 @@ def claim_due(
     return list(session.scalars(query))
 
 
-def list_by_invoice(session: Session, invoice_id: uuid.UUID) -> list[Submission]:
-    """The submissions of an invoice: one at most, as the table allows one per invoice."""
-    query = select(Submission).where(Submission.invoice_id == invoice_id)
-    return list(session.scalars(query))
+def search(
+    session: Session, filters: SubmissionFilters, offset: int, limit: int
+) -> tuple[list[Submission], int]:
+    """One page of the submissions that meet the filters, and how many meet them in all.
+
+    The newest come first. The id breaks the ties, so the order is the same on every call and a
+    submission cannot show up in two pages (or in none) while the client turns the pages.
+    """
+    conditions = []
+    if filters.invoice_id is not None:
+        conditions.append(Submission.invoice_id == filters.invoice_id)
+    if filters.status is not None:
+        conditions.append(Submission.status == filters.status)
+
+    total = session.scalar(select(func.count()).select_from(Submission).where(*conditions))
+    query = (
+        select(Submission)
+        .where(*conditions)
+        .order_by(Submission.created_at.desc(), Submission.id.desc())
+        .offset(offset)
+        .limit(limit)
+    )
+    return list(session.scalars(query)), total or 0
