@@ -5,7 +5,7 @@ from datetime import UTC, datetime, timedelta
 from sqlalchemy.orm import Session
 
 from app.aeat import AeatClient, AeatOutcome
-from app.exceptions import SubmissionAlreadyExists, SubmissionNotFound
+from app.exceptions import SubmissionAlreadyExists, SubmissionNotFound, SubmissionNotRetryable
 from app.models import Submission, SubmissionStatus
 from app.repositories import submission_repository
 from app.repositories.submission_repository import SubmissionFilters
@@ -17,6 +17,11 @@ STUCK_AFTER = timedelta(minutes=1)
 
 # How many submissions a worker takes at a time.
 BATCH_SIZE = 10
+
+# The final states that a person can send again: the AEAT never answered (FAILED) or refused it
+# (REJECTED, which is worth sending again once the cause has been corrected). An ACCEPTED one
+# must not be sent twice, and the others are already on their way.
+RETRYABLE_STATUSES = (SubmissionStatus.FAILED, SubmissionStatus.REJECTED)
 
 
 @dataclass
@@ -68,6 +73,36 @@ def list_submissions(
     """One page (the first is number 1) of the submissions that meet the filters."""
     items, total = submission_repository.search(session, filters, (page - 1) * size, size)
     return SubmissionPage(items=items, page=page, size=size, total=total)
+
+
+def retry_submission(
+    session: Session, submission_id: uuid.UUID, now: datetime | None = None
+) -> Submission:
+    """Queue a FAILED or REJECTED submission to be sent again, with its attempts from zero.
+
+    The worker sends it as it does with any PENDING one. The attempts start again so the retry
+    gets a whole set of them: with the old count, a submission that ran out of attempts would go
+    back to FAILED after a single try. `last_error` stays until the next attempt answers, so
+    the reason it was stopped is not lost.
+
+    Raises SubmissionNotFound if there is none with that id, and SubmissionNotRetryable if it is
+    not FAILED or REJECTED.
+    """
+    now = now or datetime.now(UTC)
+    submission = submission_repository.get_for_update(session, submission_id)
+    if submission is None:
+        raise SubmissionNotFound(f"submission {submission_id} does not exist")
+    if submission.status not in RETRYABLE_STATUSES:
+        raise SubmissionNotRetryable(
+            f"submission {submission_id} is {submission.status}: only a FAILED or REJECTED "
+            "submission can be retried"
+        )
+    submission.status = SubmissionStatus.PENDING
+    submission.attempts = 0
+    submission.next_attempt_at = now
+    submission.updated_at = now
+    session.commit()
+    return submission
 
 
 def claim_due(
