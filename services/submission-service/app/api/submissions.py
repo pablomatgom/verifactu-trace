@@ -111,3 +111,31 @@ def list_submissions(
         size=result.size,
         total=result.total,
     )
+
+
+@router.post(
+    "/{submission_id}/retry",
+    status_code=status.HTTP_202_ACCEPTED,
+    summary="Retry a submission",
+    response_description="The submission, waiting to be sent again.",
+    responses={
+        404: error_response("The submission does not exist (code SUBMISSION_NOT_FOUND)."),
+        409: error_response(
+            "The submission is not FAILED or REJECTED (code SUBMISSION_NOT_RETRYABLE)."
+        ),
+        422: error_response("The identifier is not a valid UUID (code VALIDATION_ERROR)."),
+    },
+)
+def retry_submission(
+    submission_id: uuid.UUID, session: Annotated[Session, Depends(get_session)]
+) -> SubmissionRead:
+    """Send a FAILED or REJECTED submission again, for when its cause has been corrected.
+
+    The answer is `202` because the invoice is not sent yet: the submission goes back to PENDING,
+    with its attempts from zero, and the background worker sends it. Only a FAILED or REJECTED
+    submission can be retried: one that was ACCEPTED must not be sent twice, and a PENDING, SENT or
+    RETRYING one is already on its way. Asking again before the worker has taken it is a 409.
+    """
+    submission = submission_service.retry_submission(session, submission_id)
+    # Build the response while the session is still open.
+    return SubmissionRead.model_validate(submission, from_attributes=True)

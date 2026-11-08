@@ -26,3 +26,10 @@ class SubmissionNotFound(DomainError):
 
     code = "SUBMISSION_NOT_FOUND"
     status_code = 404
+
+
+class SubmissionNotRetryable(DomainError):
+    """The submission is not in a state that can be retried by hand."""
+
+    code = "SUBMISSION_NOT_RETRYABLE"
+    status_code = 409

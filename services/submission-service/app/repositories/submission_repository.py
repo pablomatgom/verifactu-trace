@@ -99,3 +99,18 @@ def search(
         .limit(limit)
     )
     return list(session.scalars(query)), total or 0
+
+
+def get_for_update(session: Session, submission_id: uuid.UUID) -> Submission | None:
+    """The submission, with its row locked until the end of the transaction.
+
+    The lock makes two requests that work on the same submission wait for each other, so the
+    second one sees what the first did instead of both passing the same check.
+    """
+    query = (
+        select(Submission)
+        .where(Submission.id == submission_id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+    return session.scalar(query)
