@@ -10,6 +10,9 @@ from app.models import DocumentStatus, DocumentType
 # The docstrings and `description`s below are published in /docs: they are written for the
 # client of the API, not for the developer.
 
+ID_DESCRIPTION = "Identifier of the document."
+TYPE_DESCRIPTION = "Kind of document: ORDER, DELIVERY_NOTE or INVOICE."
+
 
 class DocumentLineOut(BaseModel):
     """One line of a document, whatever its type."""
@@ -31,8 +34,8 @@ class DocumentLineOut(BaseModel):
 class DocumentSummary(BaseModel):
     """A document as it appears in a list: its header and amounts, without the lines."""
 
-    id: uuid.UUID = Field(description="Identifier of the document.")
-    type: DocumentType = Field(description="Kind of document: ORDER, DELIVERY_NOTE or INVOICE.")
+    id: uuid.UUID = Field(description=ID_DESCRIPTION)
+    type: DocumentType = Field(description=TYPE_DESCRIPTION)
     number: str = Field(description="Unique number: series, year and counter, as P-2026-000001.")
     status: DocumentStatus = Field(description="Lifecycle state of the document.")
     issue_date: date = Field(description="Date the document was registered or issued.")
@@ -59,8 +62,8 @@ class DocumentPageRead(BaseModel):
 class DocumentRead(BaseModel):
     """An order, a delivery note or an invoice, in the same shape for the three."""
 
-    id: uuid.UUID = Field(description="Identifier of the document.")
-    type: DocumentType = Field(description="Kind of document: ORDER, DELIVERY_NOTE or INVOICE.")
+    id: uuid.UUID = Field(description=ID_DESCRIPTION)
+    type: DocumentType = Field(description=TYPE_DESCRIPTION)
     number: str = Field(
         description="Unique number: series, year and counter, as P-2026-000001, A-... or F-..."
     )
@@ -77,3 +80,45 @@ class DocumentRead(BaseModel):
     total_net: Amount = Field(description="Sum of the lines, excluding VAT.")
     total_vat: Amount = Field(description="Sum of the VAT of every line.")
     total: Amount = Field(description="Net amount plus VAT.")
+
+
+class LineRefRead(BaseModel):
+    """One side of a difference: a line of a document and the value it has."""
+
+    document_type: DocumentType = Field(description=TYPE_DESCRIPTION)
+    number: str = Field(description="Number of the document.")
+    line: int | None = Field(
+        description="Position of the line in the document. Null if the document has no such line."
+    )
+    value: Amount = Field(
+        description="The value of the field in that line. Zero if there is no line."
+    )
+
+
+class DiscrepancyRead(BaseModel):
+    """A value that is not the same in a line and in the line that comes from it."""
+
+    field: str = Field(description="What differs: `quantity`, `unit_price` or `vat_rate`.")
+    description: str = Field(description="What the line is, as written in the document.")
+    source: LineRefRead = Field(description="The line of the earlier document.")
+    target: LineRefRead = Field(description="The line of the later document that comes from it.")
+
+
+class ComparedDocument(BaseModel):
+    """A document that took part in the comparison."""
+
+    type: DocumentType = Field(description=TYPE_DESCRIPTION)
+    id: uuid.UUID = Field(description=ID_DESCRIPTION)
+    number: str = Field(description="Number of the document.")
+
+
+class DiscrepancyReport(BaseModel):
+    """The differences found between the documents of a chain."""
+
+    document_id: uuid.UUID = Field(description="Identifier of the document that was asked about.")
+    compared: list[ComparedDocument] = Field(
+        description="The documents of its chain that were compared, the order first."
+    )
+    discrepancies: list[DiscrepancyRead] = Field(
+        description="The lines that do not match. Empty if the chain is coherent."
+    )
