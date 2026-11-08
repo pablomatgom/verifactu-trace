@@ -43,7 +43,12 @@ class SubmissionRead(BaseModel):
     aeat_reference: str | None = Field(description="Reference the AEAT gave when it accepted it.")
 
 
-class SubmissionList(BaseModel):
-    """The submissions that meet the filter."""
+class SubmissionPageRead(BaseModel):
+    """One page of submissions, with what is needed to ask for the next one."""
 
-    items: list[SubmissionRead] = Field(description="The submissions. Empty if there are none.")
+    items: list[SubmissionRead] = Field(
+        description="The submissions of this page, the newest first. Empty if the page is past the end."
+    )
+    page: int = Field(description="Number of this page, starting at 1.")
+    size: int = Field(description="Maximum number of submissions per page.")
+    total: int = Field(description="Number of submissions that meet the filters, in all the pages.")

@@ -1,16 +1,20 @@
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.orm import Session
 
 from app.api.schemas.common import error_response
-from app.api.schemas.submissions import SubmissionCreate, SubmissionList, SubmissionRead
+from app.api.schemas.submissions import SubmissionCreate, SubmissionPageRead, SubmissionRead
 from app.db import get_session
+from app.models import SubmissionStatus
+from app.repositories.submission_repository import SubmissionFilters
 from app.services import submission_service
 from app.services.submission_service import SubmissionData
 
 router = APIRouter(prefix="/api/v1/submissions", tags=["submissions"])
+
+MAX_PAGE_SIZE = 100
 
 
 @router.post(
@@ -68,24 +72,42 @@ def get_submission(
 
 @router.get(
     "",
-    summary="List the submissions of an invoice",
-    response_description="The submissions of the invoice.",
+    summary="List submissions",
+    response_description="One page of submissions, the newest first.",
     responses={
         422: error_response(
-            "`invoice_id` is missing or is not a valid UUID (code VALIDATION_ERROR)."
+            "A parameter is not valid: `invoice_id` is not a UUID, `status` is unknown, `page` is "
+            "less than 1 or `size` is outside 1 to 100 (code VALIDATION_ERROR)."
         ),
     },
 )
 def list_submissions(
-    invoice_id: uuid.UUID, session: Annotated[Session, Depends(get_session)]
-) -> SubmissionList:
-    """List the submissions of an invoice.
+    session: Annotated[Session, Depends(get_session)],
+    invoice_id: Annotated[
+        uuid.UUID | None, Query(description="Only the submission of this invoice.")
+    ] = None,
+    status: Annotated[
+        SubmissionStatus | None, Query(description="Only the submissions in this state.")
+    ] = None,
+    page: Annotated[int, Query(ge=1, description="Number of the page, starting at 1.")] = 1,
+    size: Annotated[
+        int, Query(ge=1, le=MAX_PAGE_SIZE, description="Submissions per page, up to 100.")
+    ] = 20,
+) -> SubmissionPageRead:
+    """List submissions, narrowed by the filters that are given.
 
-    An invoice has one submission at most, so the list has one item or none. An invoice that
-    has no submission, or that does not exist, gets an empty list and not a 404: a filter that
-    matches nothing is not an error. `invoice_id` is required for now.
+    `status=FAILED` or `status=PENDING` gives the invoices that have not reached the AEAT. The
+    filters add up: a submission must meet all of them. The newest come first, and the page is
+    asked for with `page` and `size`. The answer carries `total`, the number of submissions that
+    meet the filters in all the pages, so a client knows how many pages there are. A page past
+    the end is empty, and so is the list of an invoice that has no submission or does not exist.
     """
-    submissions = submission_service.list_by_invoice(session, invoice_id)
-    return SubmissionList(
-        items=[SubmissionRead.model_validate(item, from_attributes=True) for item in submissions]
+    result = submission_service.list_submissions(
+        session, SubmissionFilters(invoice_id=invoice_id, status=status), page, size
+    )
+    return SubmissionPageRead(
+        items=[SubmissionRead.model_validate(item, from_attributes=True) for item in result.items],
+        page=result.page,
+        size=result.size,
+        total=result.total,
     )

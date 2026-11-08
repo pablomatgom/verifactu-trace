@@ -8,6 +8,7 @@ from app.aeat import AeatClient, AeatOutcome
 from app.exceptions import SubmissionAlreadyExists, SubmissionNotFound
 from app.models import Submission, SubmissionStatus
 from app.repositories import submission_repository
+from app.repositories.submission_repository import SubmissionFilters
 from app.services.retry import RetryPolicy
 
 # A submission that has been SENT this long without an answer is taken as lost (the service died
@@ -16,6 +17,17 @@ STUCK_AFTER = timedelta(minutes=1)
 
 # How many submissions a worker takes at a time.
 BATCH_SIZE = 10
+
+
+@dataclass
+class SubmissionPage:
+    """One page of a list of submissions."""
+
+    items: list[Submission]
+    page: int
+    size: int
+    # How many submissions meet the filters in all, not only in this page.
+    total: int
 
 
 @dataclass
@@ -50,9 +62,12 @@ def get_submission(session: Session, submission_id: uuid.UUID) -> Submission:
     return submission
 
 
-def list_by_invoice(session: Session, invoice_id: uuid.UUID) -> list[Submission]:
-    """The submissions of an invoice. It is empty if the invoice has none."""
-    return submission_repository.list_by_invoice(session, invoice_id)
+def list_submissions(
+    session: Session, filters: SubmissionFilters, page: int, size: int
+) -> SubmissionPage:
+    """One page (the first is number 1) of the submissions that meet the filters."""
+    items, total = submission_repository.search(session, filters, (page - 1) * size, size)
+    return SubmissionPage(items=items, page=page, size=size, total=total)
 
 
 def claim_due(
