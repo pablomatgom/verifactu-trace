@@ -1,0 +1,3 @@
+# A Makefile needs LF line endings: with CRLF (what Git on Windows would write in the working
+# copy) `make` fails on the carriage return at the end of every line.
+Makefile text eol=lf

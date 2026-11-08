@@ -17,9 +17,9 @@ Ambos se lanzan en cada pull request hacia `main` y en cada push a `main`. `dock
 
 | Trabajo | Qué hace | Comando |
 |---|---|---|
-| `lint` | Comprueba el estilo y los errores comunes, y que el código está formateado | `ruff check .` y `ruff format --check .` |
-| `test` | Ejecuta las pruebas de un servicio, con una PostgreSQL y una Redis desechables como servicios del trabajo. Una instancia por servicio (`document-service`, `traceability-service` y `submission-service`) | `python -m pytest` desde `services/<servicio>` |
-| `integration` | Levanta el sistema completo con Docker Compose y comprueba que los cinco contenedores funcionan juntos | `docker compose up --build --wait` |
+| `lint` | Comprueba el estilo y los errores comunes, y que el código está formateado | `make lint` (`ruff check .` y `ruff format --check .`) |
+| `test` | Ejecuta las pruebas de un servicio, con una PostgreSQL y una Redis desechables como servicios del trabajo. Una instancia por servicio (`document-service`, `traceability-service` y `submission-service`) | `make test SERVICE=<servicio>` (`python -m pytest` desde `services/<servicio>` |
+| `integration` | Levanta el sistema completo con Docker Compose y comprueba que los cinco contenedores funcionan juntos | `make up` (`docker compose up --build --wait`) |
 
 Ambos usan Python 3.12, la misma versión que las imágenes Docker, y instalan las dependencias desde `requirements-dev.txt`, que agrupa las de los tres servicios y las herramientas de desarrollo.
 
@@ -48,7 +48,7 @@ Cada servicio tiene sus pruebas en `tests/` y las ejecuta `pytest`. `submission-
 Las pruebas unitarias comprueban cada servicio por separado. El trabajo `integration` comprueba lo que ellas no pueden: que las piezas funcionan **juntas**. Es el mismo procedimiento que se sigue en local, automatizado:
 
 1. Crea `.env` a partir de `.env.example`.
-2. Ejecuta `docker compose up --build --wait --wait-timeout 180`. Construye las tres imágenes y espera a que todos los contenedores estén sanos. Si alguno no lo consigue en tres minutos, el trabajo falla.
+2. Ejecuta `make up`, que lanza `docker compose up --build --wait --wait-timeout 180`. Construye las tres imágenes y espera a que todos los contenedores estén sanos. Si alguno no lo consigue en tres minutos, el trabajo falla.
 3. Llama a `GET /health` de cada servicio en los puertos `8001`, `8002` y `8003`, con reintentos.
 4. Consulta PostgreSQL y comprueba que existen los tres esquemas (`documents`, `traceability` y `submissions`), lo que verifica que el script de inicialización se ejecutó.
 5. Comprueba que los tres servicios aplicaron sus migraciones al arrancar (consulta su tabla `alembic_version`).
@@ -72,21 +72,38 @@ Con ello se valida además el propio `compose.yaml`: las redes, el orden de arra
 
 ### Reproducir el CI en local
 
+El CI llama a los mismos objetivos del [`Makefile`](../Makefile) que se usan en local, así que se reproduce con:
+
 ```bash
-ruff check .
-ruff format --check .
-cd services/document-service && python -m pytest
+make lint
+make test SERVICE=document-service   # o sin SERVICE, para los tres servicios
 ```
 
-Para que `ruff format --check` pase antes de subir los cambios, se puede ejecutar `ruff format .`, que sí modifica los ficheros.
+`make test` necesita `DATABASE_URL` y `REDIS_URL` apuntando a una PostgreSQL y una Redis (ver [`database.md`](database.md)). Si faltan, avisa y omite los tests que las necesitan, mientras que en el CI esos tests fallan. Para que `make lint` pase antes de subir los cambios, `make format` formatea el código y ordena los imports, que es lo único que modifica ficheros.
+
+### El gestor de tareas
+
+Los comandos viven en el [`Makefile`](../Makefile), y el CI los llama en lugar de repetirlos en el YAML. Así, lo que pasa en local es lo que pasa en el CI.
+
+| Objetivo | Qué hace |
+|---|---|
+| `make help` | Lista los objetivos |
+| `make test` | `pytest` de los tres servicios, uno detrás de otro, desde la carpeta de cada uno. Un servicio que falla no detiene a los demás, y el objetivo falla al final. `SERVICE=<nombre>` limita a uno y `PYTEST_ARGS` pasa argumentos a `pytest` |
+| `make lint` | `ruff check .` y `ruff format --check .` |
+| `make format` | `ruff check --fix .` y `ruff format .` |
+| `make up` | Crea `.env` si falta y ejecuta `docker compose up --build --wait --wait-timeout 180` |
+| `make down` | `docker compose down`: para el sistema y conserva los datos |
+| `make clean` | `docker compose down -v`: para el sistema y borra los volúmenes |
+
+`make` viene con Linux y macOS. En Windows se instala con `choco install make` o `scoop install make`, y las órdenes se lanzan desde Git Bash, porque las recetas son de `sh`. El `Makefile` se guarda siempre con finales de línea LF (`.gitattributes`): con CRLF, que es lo que Git escribiría en Windows, `make` falla al leer cada línea.
 
 ### Si el CI falla
 
 | Fallo | Causa habitual | Solución |
 |---|---|---|
-| `ruff check` con `I001` | Imports desordenados | `ruff check --fix .` |
-| `ruff format --check` | Código sin formatear | `ruff format .` |
-| `pytest` falla en un solo servicio | El cambio afecta a ese servicio | Entrar en `services/<servicio>` y ejecutar `python -m pytest` |
+| `ruff check` con `I001` | Imports desordenados | `make format` |
+| `ruff format --check` | Código sin formatear | `make format` |
+| `pytest` falla en un solo servicio | El cambio afecta a ese servicio | `make test SERVICE=<servicio>` |
 | Falla la instalación de dependencias | Un rango de versiones en `requirements.txt` ya no se puede resolver | Revisar el rango del paquete que indica el error |
 
 ## Docker: lint, construcción y publicación

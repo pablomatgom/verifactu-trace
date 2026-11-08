@@ -977,17 +977,21 @@ PostgreSQL y Redis solo son accesibles desde los demás contenedores, y los puer
 
 Las pruebas se ejecutan por servicio, porque todos usan el paquete `app`. Las de `document-service` necesitan una PostgreSQL y leen su URL de `DATABASE_URL`; sin ella, las que dependen de la base de datos se omiten (ver [`docs/database.md`](docs/database.md)):
 
-```bash
-cd services/document-service
-python -m pytest
-```
-
-El linter y el formateo se comprueban desde la raíz del repositorio:
+Los comandos se lanzan con un [`Makefile`](Makefile) en la raíz, que es el **gestor de tareas** del proyecto y el mismo que usa el CI:
 
 ```bash
-ruff check .
-ruff format --check .
+make help                            # lista los objetivos
+make test                            # pytest de los tres servicios, uno detrás de otro
+make test SERVICE=document-service   # pytest de un solo servicio
+make test PYTEST_ARGS="-x -k invoice" # argumentos extra para pytest
+make lint                            # ruff check y ruff format --check
+make format                          # ruff check --fix y ruff format
+make up                              # construye y levanta el sistema con Docker Compose
+make down                            # lo para, conservando los datos
+make clean                           # lo para y borra los datos (los volúmenes)
 ```
+
+`make test` avisa si `DATABASE_URL` o `REDIS_URL` no están definidas, porque entonces se omiten los tests que necesitan PostgreSQL o Redis (en el CI fallan). `make` viene con Linux y macOS. En Windows se instala con `choco install make` o `scoop install make`, y las órdenes se lanzan desde Git Bash. Los comandos que hay detrás de cada objetivo están en el propio `Makefile`.
 
 ## Integración continua
 
@@ -995,8 +999,8 @@ Cada pull request hacia `main` y cada push a `main` ejecutan dos workflows de [G
 
 | Workflow | Trabajo | Qué comprueba |
 |---|---|---|
-| [`ci.yml`](.github/workflows/ci.yml) | `Lint` | `ruff check` y `ruff format --check` sobre todo el repositorio |
-| [`ci.yml`](.github/workflows/ci.yml) | `Test` | `pytest` de cada servicio, en una matriz con un trabajo por servicio |
+| [`ci.yml`](.github/workflows/ci.yml) | `Lint` | `make lint`: `ruff check` y `ruff format --check` sobre todo el repositorio |
+| [`ci.yml`](.github/workflows/ci.yml) | `Test` | `make test`: `pytest` de cada servicio, en una matriz con un trabajo por servicio |
 | [`ci.yml`](.github/workflows/ci.yml) | `Integration` | Levanta el sistema completo con Docker Compose y comprueba la salud de los servicios y los esquemas de PostgreSQL |
 | [`docker.yml`](.github/workflows/docker.yml) | `Hadolint` | Análisis del `Dockerfile` de cada servicio |
 | [`docker.yml`](.github/workflows/docker.yml) | `Build` | Construcción de la imagen de cada servicio y, fuera de los pull requests, su publicación |
@@ -1018,11 +1022,11 @@ En un pull request la imagen se construye para comprobar que el Dockerfile funci
 ### Reproducir las comprobaciones en local
 
 ```bash
-ruff check . && ruff format --check .                                  # lint
-cd services/document-service && python -m pytest                       # tests de un servicio
+make lint                                                              # lint
+make test SERVICE=document-service                                     # tests de un servicio (necesita DATABASE_URL y REDIS_URL)
 docker run --rm -i hadolint/hadolint < services/document-service/Dockerfile   # análisis del Dockerfile
 docker build -t document-service services/document-service             # construcción de la imagen
-docker compose up --build --wait                                       # integración (requiere .env)
+make up                                                                # integración (crea .env si falta)
 ```
 
 El detalle de los workflows, los permisos y las decisiones de diseño está en [`docs/ci.md`](docs/ci.md).
