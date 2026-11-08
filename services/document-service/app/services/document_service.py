@@ -67,6 +67,11 @@ def cancel_document(session: Session, document_id: uuid.UUID) -> Document:
             f"invoice {document.number} cannot be cancelled: an issued invoice can only be "
             "rectified"
         )
+    if document.type == DocumentType.CORRECTIVE_INVOICE:
+        raise DocumentNotCancellable(
+            f"corrective invoice {document.number} cannot be cancelled: it is final, like any "
+            "issued invoice"
+        )
     if document.status == DocumentStatus.CANCELLED:
         raise DocumentNotCancellable(f"{document.number} is already cancelled")
     if document.type == DocumentType.DELIVERY_NOTE and document_repository.exists_child(

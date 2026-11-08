@@ -5,6 +5,7 @@ SERIES = {
     DocumentType.ORDER: "P",
     DocumentType.DELIVERY_NOTE: "A",
     DocumentType.INVOICE: "F",
+    DocumentType.CORRECTIVE_INVOICE: "R",
 }
 
 

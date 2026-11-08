@@ -28,11 +28,15 @@ from app.db import Base
 
 
 class DocumentType(StrEnum):
-    """Kind of document of the chain order -> delivery note -> invoice."""
+    """Kind of document of the chain order -> delivery note -> invoice.
+
+    A corrective invoice rectifies an invoice that was already issued.
+    """
 
     ORDER = "ORDER"
     DELIVERY_NOTE = "DELIVERY_NOTE"
     INVOICE = "INVOICE"
+    CORRECTIVE_INVOICE = "CORRECTIVE_INVOICE"
 
 
 class DocumentStatus(StrEnum):
@@ -62,6 +66,9 @@ class Document(Base):
 
     # The previous document of the chain (an order has none; a delivery note points to its order).
     parent_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("documents.id"), default=None)
+    # Why a corrective invoice was issued. Only a corrective invoice has it; its parent is the
+    # invoice it rectifies.
+    correction_reason: Mapped[str | None] = mapped_column(String(300), default=None)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     # The previous document itself, to go up the chain (invoice -> delivery note -> order).
@@ -116,7 +123,9 @@ class DocumentLine(Base):
 
     # The API validates these values too; the database is the last line of defence.
     __table_args__ = (
-        CheckConstraint("quantity > 0", name="ck_document_lines_quantity_positive"),
+        # Not zero, and not "positive": a corrective invoice takes units back with a negative
+        # quantity. The API still demands a positive quantity in orders and delivery notes.
+        CheckConstraint("quantity <> 0", name="ck_document_lines_quantity_not_zero"),
         CheckConstraint("unit_price >= 0", name="ck_document_lines_unit_price_not_negative"),
         CheckConstraint("vat_rate >= 0 AND vat_rate <= 100", name="ck_document_lines_vat_rate"),
         Index("ix_document_lines_document_id", "document_id"),

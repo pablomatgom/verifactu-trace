@@ -7,7 +7,7 @@ from itertools import pairwise
 from sqlalchemy.orm import Session
 
 from app.exceptions import DocumentNotFound
-from app.models import Document
+from app.models import Document, DocumentType
 from app.repositories import document_repository
 
 # What is compared between a line and the line that comes from it.
@@ -78,10 +78,15 @@ def compare(source: Document, target: Document) -> list[Discrepancy]:
 
 
 def compare_chain(chain: Sequence[Document]) -> list[Discrepancy]:
-    """The differences between each document of a chain (oldest first) and the next one."""
+    """The differences between each document of a chain (oldest first) and the next one.
+
+    A corrective invoice is not compared with the invoice it rectifies: it differs from it on
+    purpose, since it takes units back.
+    """
     differences = []
     for source, target in pairwise(chain):
-        differences.extend(compare(source, target))
+        if target.type != DocumentType.CORRECTIVE_INVOICE:
+            differences.extend(compare(source, target))
     return differences
 
 

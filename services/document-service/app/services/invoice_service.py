@@ -73,12 +73,17 @@ def create_invoice(session: Session, publisher: EventPublisher, data: InvoiceDat
     document_repository.add(session, invoice)
     session.commit()
 
-    _announce(publisher, invoice, order_id=delivery_note.parent_id)
+    announce_issued(publisher, invoice, delivery_note.id, delivery_note.parent_id)
     return invoice
 
 
-def _announce(publisher: EventPublisher, invoice: Document, order_id: uuid.UUID | None) -> None:
-    """Publish `invoice.issued`, once the invoice is committed.
+def announce_issued(
+    publisher: EventPublisher,
+    invoice: Document,
+    delivery_note_id: uuid.UUID,
+    order_id: uuid.UUID | None,
+) -> None:
+    """Publish `invoice.issued`, once the invoice (or the corrective invoice) is committed.
 
     If the event cannot be published the invoice stays issued: a failure of the services that
     react to it must not stop invoices from being issued. It is logged so it can be noticed.
@@ -86,7 +91,7 @@ def _announce(publisher: EventPublisher, invoice: Document, order_id: uuid.UUID 
     fields = {
         "invoice_id": str(invoice.id),
         "number": invoice.number,
-        "delivery_note_id": str(invoice.parent_id),
+        "delivery_note_id": str(delivery_note_id),
         "order_id": str(order_id),
         "total": str(invoice.total),
         "issued_at": invoice.created_at.isoformat(),

@@ -11,7 +11,7 @@ from app.models import DocumentStatus, DocumentType
 # client of the API, not for the developer.
 
 ID_DESCRIPTION = "Identifier of the document."
-TYPE_DESCRIPTION = "Kind of document: ORDER, DELIVERY_NOTE or INVOICE."
+TYPE_DESCRIPTION = "Kind of document: ORDER, DELIVERY_NOTE, INVOICE or CORRECTIVE_INVOICE."
 
 
 class DocumentLineOut(BaseModel):
