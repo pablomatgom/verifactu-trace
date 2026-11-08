@@ -1,5 +1,7 @@
 # Integración continua
 
+Por qué se eligieron `make`, `pytest` y GitHub Actions frente a sus alternativas está en [`hito2.md`](hito2.md). Este documento describe cómo están configurados.
+
 La integración continua se define en dos workflows de GitHub Actions, en `.github/workflows/`. Se ejecutan en `ubuntu-24.04`, versión fijada para que una migración de `ubuntu-latest` no cambie el entorno sin avisar.
 
 | Workflow | Fichero | Qué comprueba |
