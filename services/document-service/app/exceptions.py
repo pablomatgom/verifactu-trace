@@ -16,6 +16,10 @@ class NotFound(DomainError):
     """Something the request asks for or refers to does not exist: the API answers 404."""
 
 
+class Conflict(DomainError):
+    """The request clashes with the state the document is in: the API answers 409."""
+
+
 class ReferenceNotFound(NotFound):
     """The document the request refers to does not exist (or is not of the expected type)."""
 
@@ -50,3 +54,15 @@ class QuantityExceeded(DomainError):
     """The delivered quantity of an order line would be greater than the ordered one."""
 
     code = "QUANTITY_EXCEEDED"
+
+
+class DocumentNotCancellable(Conflict):
+    """The document cannot be cancelled: it is an invoice, it is already cancelled or it is in use."""
+
+    code = "DOCUMENT_NOT_CANCELLABLE"
+
+
+class ReferenceCancelled(DomainError):
+    """The document the request refers to was cancelled, so nothing new can come from it."""
+
+    code = "REFERENCE_CANCELLED"

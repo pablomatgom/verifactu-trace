@@ -103,6 +103,7 @@ def get_for_update(
         select(Document)
         .where(Document.id == document_id, Document.type == document_type)
         .with_for_update()
+        .execution_options(populate_existing=True)
     )
     return session.scalar(query)
 
@@ -125,8 +126,43 @@ def delivered_quantities(session: Session, order_id: uuid.UUID) -> dict[uuid.UUI
     query = (
         select(DocumentLine.source_line_id, func.sum(DocumentLine.quantity))
         .join(Document, DocumentLine.document_id == Document.id)
-        .where(Document.parent_id == order_id, Document.type == DocumentType.DELIVERY_NOTE)
+        .where(
+            Document.parent_id == order_id,
+            Document.type == DocumentType.DELIVERY_NOTE,
+            # A cancelled delivery note delivers nothing: its quantities are free again.
+            Document.status != DocumentStatus.CANCELLED,
+        )
         .group_by(DocumentLine.source_line_id)
     )
     # Each row is (order line id, quantity), which dict() takes as a key and its value.
     return dict(session.execute(query).all())
+
+
+def lock(session: Session, document_id: uuid.UUID) -> Document | None:
+    """Return the document with that id, whatever its type, with its row locked.
+
+    Like `get_for_update` but for a request that does not know the type yet. The row is read again
+    from the database even if the session already has it, so a request that waited for the lock
+    sees what the one before it did.
+    """
+    query = (
+        select(Document)
+        .where(Document.id == document_id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+    return session.scalar(query)
+
+
+def live_delivery_notes(session: Session, order_id: uuid.UUID) -> list[str]:
+    """The numbers of the delivery notes of an order that have not been cancelled."""
+    query = (
+        select(Document.number)
+        .where(
+            Document.parent_id == order_id,
+            Document.type == DocumentType.DELIVERY_NOTE,
+            Document.status != DocumentStatus.CANCELLED,
+        )
+        .order_by(Document.number)
+    )
+    return list(session.scalars(query))

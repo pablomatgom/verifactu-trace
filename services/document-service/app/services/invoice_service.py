@@ -6,7 +6,7 @@ from datetime import date
 from sqlalchemy.orm import Session
 
 from app.events import INVOICE_ISSUED, EventPublisher, EventPublishError
-from app.exceptions import DeliveryNoteAlreadyInvoiced, ReferenceNotFound
+from app.exceptions import DeliveryNoteAlreadyInvoiced, ReferenceCancelled, ReferenceNotFound
 from app.models import Document, DocumentLine, DocumentStatus, DocumentType
 from app.repositories import counter_repository, document_repository
 from app.services.numbering import SERIES, format_number
@@ -28,6 +28,8 @@ def create_invoice(session: Session, publisher: EventPublisher, data: InvoiceDat
     )
     if delivery_note is None:
         raise ReferenceNotFound(f"delivery note {data.delivery_note_id} does not exist")
+    if delivery_note.status == DocumentStatus.CANCELLED:
+        raise ReferenceCancelled(f"delivery note {delivery_note.number} is cancelled")
     if document_repository.exists_child(session, delivery_note.id, DocumentType.INVOICE):
         raise DeliveryNoteAlreadyInvoiced(
             f"delivery note {delivery_note.number} already has an invoice"

@@ -39,6 +39,7 @@ class DocumentStatus(StrEnum):
     """Lifecycle state of a document."""
 
     ISSUED = "ISSUED"
+    CANCELLED = "CANCELLED"
 
 
 class Document(Base):

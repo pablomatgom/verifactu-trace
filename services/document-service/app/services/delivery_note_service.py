@@ -5,7 +5,12 @@ from decimal import Decimal
 
 from sqlalchemy.orm import Session
 
-from app.exceptions import InvalidOrderLine, QuantityExceeded, ReferenceNotFound
+from app.exceptions import (
+    InvalidOrderLine,
+    QuantityExceeded,
+    ReferenceCancelled,
+    ReferenceNotFound,
+)
 from app.models import Document, DocumentLine, DocumentStatus, DocumentType
 from app.repositories import counter_repository, document_repository
 from app.services.numbering import SERIES, format_number
@@ -36,6 +41,8 @@ def create_delivery_note(session: Session, data: DeliveryNoteData) -> Document:
     order = document_repository.get_for_update(session, data.order_id, DocumentType.ORDER)
     if order is None:
         raise ReferenceNotFound(f"order {data.order_id} does not exist")
+    if order.status == DocumentStatus.CANCELLED:
+        raise ReferenceCancelled(f"order {order.number} is cancelled")
 
     order_lines = {line.position: line for line in order.lines}
     delivered = document_repository.delivered_quantities(session, order.id)

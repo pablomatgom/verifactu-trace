@@ -206,7 +206,7 @@ Esta sección define el contrato de la API que expone `verifactu-trace` a travé
 | `POST` | `/api/v1/invoices` | Emite una factura que referencia a un albarán | CU-3 | `201`, `404`, `422` |
 | `GET` | `/api/v1/documents/{id}` | Consulta un documento por identificador | CU-4 | `200`, `404`, `422` |
 | `GET` | `/api/v1/documents` | Lista documentos. Filtros: `type`, `customer`, `series`, `from`, `to`, `status` | CU-5 | `200`, `422` |
-| `POST` | `/api/v1/documents/{id}/cancel` | Anula un pedido o albarán no facturado | CU-6 (extra) | `200`, `404`, `409` |
+| `POST` | `/api/v1/documents/{id}/cancel` | Anula un pedido o albarán no facturado | CU-6 (extra) | `200`, `404`, `409`, `422` |
 | `GET` | `/api/v1/documents/{id}/discrepancies` | Detecta diferencias entre pedido, albarán y factura | CU-7 (extra) | `200`, `404` |
 | `POST` | `/api/v1/invoices/{id}/corrections` | Emite una factura rectificativa | CU-8 (extra) | `201`, `404`, `422` |
 
@@ -289,7 +289,8 @@ Los errores usan el cuerpo común `{"error": {"code": "...", "message": "..."}}`
 |---|---|---|
 | `404` | `REFERENCE_NOT_FOUND` | El pedido no existe, o el identificador es de un documento que no es un pedido |
 | `422` | `INVALID_ORDER_LINE` | `order_line` no es una línea del pedido |
-| `422` | `QUANTITY_EXCEEDED` | Lo entregado, sumando los albaranes anteriores, supera lo pedido |
+| `422` | `QUANTITY_EXCEEDED` | Lo entregado, sumando los albaranes anteriores, supera lo pedido. Los albaranes anulados no cuentan |
+| `422` | `REFERENCE_CANCELLED` | El pedido está anulado (CU-6) |
 | `422` | `VALIDATION_ERROR` | Cuerpo mal formado: cantidad no mayor que cero, sin líneas, una línea del pedido repetida, falta un campo o hay uno desconocido |
 
 ```json
@@ -335,6 +336,7 @@ Respuesta `201`:
 |---|---|---|
 | `404` | `REFERENCE_NOT_FOUND` | El albarán no existe, o el identificador es de un documento que no es un albarán |
 | `422` | `DELIVERY_NOTE_ALREADY_INVOICED` | El albarán ya tiene factura |
+| `422` | `REFERENCE_CANCELLED` | El albarán está anulado (CU-6) |
 | `422` | `VALIDATION_ERROR` | Cuerpo mal formado: falta `delivery_note_id`, no es un UUID o hay un campo desconocido |
 
 Dos peticiones simultáneas para el mismo albarán no pueden emitir dos facturas: el servidor bloquea el albarán mientras comprueba y guarda, y la base de datos lo impide además con un índice único.
@@ -394,7 +396,7 @@ Lista pedidos, albaranes y facturas. Todos los parámetros son opcionales y **lo
 | `type` | Tipo: `ORDER`, `DELIVERY_NOTE` o `INVOICE` |
 | `customer` | Cliente: el texto es su NIF/CIF exacto, o parte de su nombre (sin distinguir mayúsculas) |
 | `series` | Serie: `P`, `A` o `F` |
-| `status` | Estado: `ISSUED` por ahora |
+| `status` | Estado: `ISSUED` o `CANCELLED` |
 | `from`, `to` | Fecha de emisión, desde `from` hasta `to`, **ambas incluidas** |
 | `page` | Número de página, desde 1 (por defecto `1`) |
 | `size` | Documentos por página, de 1 a 100 (por defecto `20`) |
@@ -435,6 +437,37 @@ Los documentos se ordenan por fecha de emisión descendente y, dentro del mismo 
 |---|---|---|
 | `422` | `VALIDATION_ERROR` | Un parámetro no es válido: `type` o `status` desconocidos, una fecha mal formada, `page` menor que 1 o `size` fuera de 1 a 100 |
 | `422` | `INVALID_DATE_RANGE` | `from` es posterior a `to` |
+
+#### `POST /api/v1/documents/{id}/cancel` (CU-6)
+
+Anula un pedido o un albarán, para corregir un error. No lleva cuerpo. El documento **no se borra**: se conserva con `status` `CANCELLED`, con su número, y la respuesta es el documento entero, igual que `GET /api/v1/documents/{id}`.
+
+Un documento anulado no se puede volver a usar: no se pueden hacer albaranes de un pedido anulado ni facturas de un albarán anulado (`422` `REFERENCE_CANCELLED`). Anular un albarán **libera las cantidades** que entregaba, que se pueden volver a entregar. Y el número de un documento anulado no se reutiliza, como corresponde a una numeración fiscal.
+
+Qué se puede anular:
+
+| Documento | Se puede anular si… |
+|---|---|
+| Pedido | No tiene albaranes, o todos están anulados. Si tuviera alguno vivo, quedaría sin pedido: se anulan antes |
+| Albarán | No tiene factura |
+| Factura | **Nunca**: una factura emitida no se anula, solo se rectifica |
+
+Un documento que ya está anulado tampoco se puede anular otra vez.
+
+| Respuesta | Código | Cuándo |
+|---|---|---|
+| `200` | — | El documento queda `CANCELLED` |
+| `404` | `DOCUMENT_NOT_FOUND` | No existe un documento con ese id |
+| `409` | `DOCUMENT_NOT_CANCELLABLE` | Es una factura, ya está anulado, es un albarán con factura o es un pedido con albaranes sin anular. El mensaje dice el motivo |
+| `422` | `VALIDATION_ERROR` | El id no es un UUID |
+
+```json
+{ "error": { "code": "DOCUMENT_NOT_CANCELLABLE", "message": "order P-2026-000007 has delivery notes that are not cancelled (A-2026-000006): cancel them first" } }
+```
+
+Una anulación y una petición que se apoya en el mismo documento (un albarán de ese pedido, una factura de ese albarán) a la vez no se pisan: la anulación bloquea el documento, y la otra petición espera y ve su resultado. O la anulación va primero y la otra se rechaza con `REFERENCE_CANCELLED`, o va después y se rechaza la anulación.
+
+La anulación **no publica ningún evento**: `traceability-service` solo registra las facturas, y estas no se pueden anular.
 
 ### traceability-service
 
@@ -797,7 +830,7 @@ Solo se puede reintentar un envío **`FAILED`** (se agotaron los intentos) o **`
 
 ### Estados y reglas
 
-- **Documento**: `ISSUED` o `CANCELLED`. Una factura emitida no se puede anular, solo rectificar.
+- **Documento**: `ISSUED` o `CANCELLED`. Se pueden anular los pedidos y albaranes que nada ha aprovechado (CU-6). Una factura emitida no se puede anular, solo rectificar.
 - **Envío**: `PENDING` → `SENT` → `ACCEPTED` o `REJECTED`. Ante un fallo transitorio pasa a `RETRYING` con espera creciente y, agotados los intentos, a `FAILED`.
 - **Hash encadenado**: cada evento guarda `sequence`, `previous_hash` y `hash`, calculado como SHA-256 del contenido canónico del evento concatenado con `previous_hash`. Cada documento tiene su propia cadena. La verificación recalcula la cadena y devuelve la primera posición inválida si la hay.
 - **Autenticación**: queda fuera del MVP. Se planteará una clave de API en cabecera (`X-API-Key`) en hitos posteriores.
