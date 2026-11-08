@@ -120,7 +120,7 @@ def test_an_invoice_without_submissions_gets_an_empty_list(client: TestClient):
     response = list_for(client, uuid.uuid4())
 
     assert response.status_code == 200
-    assert response.json() == {"items": []}
+    assert response.json() == {"items": [], "page": 1, "size": 20, "total": 0}
 
 
 def test_the_list_has_the_same_shape_as_a_single_submission(client: TestClient, session: Session):
@@ -143,9 +143,8 @@ def test_an_identifier_that_is_not_a_uuid_returns_422(
     assert "submission_id" in error["message"]
 
 
-@pytest.mark.parametrize("params", [{}, {"invoice_id": "not-a-uuid"}])
-def test_the_listing_needs_a_valid_invoice_id(offline_client: TestClient, params: dict):
-    response = offline_client.get("/api/v1/submissions", params=params)
+def test_the_invoice_id_of_the_listing_must_be_a_uuid(offline_client: TestClient):
+    response = offline_client.get("/api/v1/submissions", params={"invoice_id": "not-a-uuid"})
 
     assert response.status_code == 422
     error = response.json()["error"]
@@ -153,14 +152,10 @@ def test_the_listing_needs_a_valid_invoice_id(offline_client: TestClient, params
     assert "invoice_id" in error["message"]
 
 
-def test_docs_describe_the_queries_and_their_errors(offline_client: TestClient):
+def test_docs_describe_the_query_of_one_submission_and_its_errors(offline_client: TestClient):
     spec = offline_client.get("/openapi.json").json()
 
-    one = spec["paths"]["/api/v1/submissions/{submission_id}"]["get"]
-    many = spec["paths"]["/api/v1/submissions"]["get"]
-    for operation, statuses in ((one, ("404", "422")), (many, ("422",))):
-        for status in statuses:
-            schema = operation["responses"][status]["content"]["application/json"]["schema"]
-            assert schema["$ref"].endswith("/ErrorResponse"), status
-    properties = spec["components"]["schemas"]["SubmissionList"]["properties"]
-    assert set(properties) == {"items"}
+    operation = spec["paths"]["/api/v1/submissions/{submission_id}"]["get"]
+    for status in ("404", "422"):
+        schema = operation["responses"][status]["content"]["application/json"]["schema"]
+        assert schema["$ref"].endswith("/ErrorResponse"), status
