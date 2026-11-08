@@ -140,14 +140,16 @@ ghcr.io/pablomatgom/verifactu-trace/submission-service
 |---|---|---|
 | `sha-<commit>` | En cada push a `main` | Identifica exactamente qué código contiene la imagen y permite volver a una versión anterior |
 | `latest` | En cada push a `main` | Apunta a la última versión de la rama principal |
-| `1.0.0` | Al subir el tag `v1.0.0` | Versión estable, tal y como se etiqueta una release |
+| `0.2.0` | Al subir el tag `v0.2.0` | Versión estable, tal y como se etiqueta una release. Esta es la del Hito 2 |
 
-Para publicar una versión estable basta con crear un tag:
+Para publicar una versión estable basta con crear un tag anotado sobre `main` y subirlo:
 
 ```bash
-git tag v1.0.0
-git push origin v1.0.0
+git tag -a v0.2.0 -m "Hito 2"
+git push origin v0.2.0
 ```
+
+El tag lanza `docker.yml`, que publica `0.2.0` y `sha-<commit>` para cada servicio. `latest` no cambia, porque solo se actualiza desde la rama por defecto.
 
 `latest` es cómoda pero cambia con el tiempo, así que un despliegue reproducible debe fijar `sha-<commit>` o una versión.
 
