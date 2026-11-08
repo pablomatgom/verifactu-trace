@@ -349,14 +349,62 @@ Dos peticiones simultáneas para el mismo albarán no pueden emitir dos facturas
 | `number` | Número de la factura, como `F-2026-000001` |
 | `delivery_note_id` | Identificador del albarán facturado |
 | `order_id` | Identificador del pedido de origen |
-| `total` | Total de la factura, como `25.41` |
+| `total` | Total de la factura, como `25.41`. Negativo en una rectificativa (CU-8) |
 | `issued_at` | Fecha y hora de emisión, en ISO 8601 con zona horaria |
 
-El evento se publica **después de guardar** la factura. Si Redis no responde, la factura se emite igual (`201`) y el fallo queda en el log, porque un servicio que reacciona a las facturas no debe impedir emitirlas. Eso significa que el evento se puede perder; ver las limitaciones en [`docs/arquitectura.md`](docs/arquitectura.md).
+Una factura rectificativa (CU-8) publica el mismo evento: `invoice_id` y `number` son los suyos, y `delivery_note_id` y `order_id` los de la factura que rectifica. El evento se publica **después de guardar** la factura. Si Redis no responde, la factura se emite igual (`201`) y el fallo queda en el log, porque un servicio que reacciona a las facturas no debe impedir emitirlas. Eso significa que el evento se puede perder; ver las limitaciones en [`docs/arquitectura.md`](docs/arquitectura.md).
+
+#### `POST /api/v1/invoices/{id}/corrections` (CU-8)
+
+Emite una factura **rectificativa**: corrige una factura ya emitida sin modificarla. `{id}` es el de la factura que se rectifica.
+
+```json
+{
+  "reason": "Se devolvieron dos unidades dañadas",
+  "lines": [ { "invoice_line": 1, "quantity": 2 } ]
+}
+```
+
+`reason` es el motivo (obligatorio, hasta 300 caracteres). `lines` dice cuánto se devuelve de cada línea de la factura (`invoice_line` es su posición, desde 1) y es **opcional**: si se omite, se devuelve todo lo que aún no se había rectificado. Una línea se puede dejar fuera, pero no repetir. Las cantidades se envían en positivo, hasta con 3 decimales.
+
+Responde `201` con la rectificativa, con su propio número de la **serie `R`** (`R-2026-000001`) y la referencia a la factura original en `corrects_invoice_id`:
+
+```json
+{
+  "id": "c411a3b4-3768-432b-9724-c8300f73bf60",
+  "type": "CORRECTIVE_INVOICE",
+  "number": "R-2026-000001",
+  "status": "ISSUED",
+  "issue_date": "2026-11-08",
+  "corrects_invoice_id": "5d2e8a6c-1f40-4b9a-9c77-3e0a6b4d1f52",
+  "reason": "Se devolvieron dos unidades dañadas",
+  "customer": { "name": "Acme S.L.", "tax_id": "B12345678" },
+  "lines": [
+    { "position": 1, "invoice_line": 1, "description": "Widget", "quantity": -2.0, "unit_price": 10.5, "vat_rate": 21.0 }
+  ],
+  "total_net": -21.0,
+  "total_vat": -4.41,
+  "total": -25.41
+}
+```
+
+- **Cantidades y totales negativos.** La rectificativa devuelve unidades, así que sus líneas tienen cantidad negativa, al precio y con el IVA de la factura original, y sus importes salen negativos con el mismo redondeo que cualquier factura. Con `lines` omitido, anula exactamente los importes de la factura original, con el signo cambiado.
+- **La factura original no se toca.** La rectificativa es un documento aparte (`type` `CORRECTIVE_INVOICE`) cuyo `parent_id` es la factura. Se lee con `GET /api/v1/documents/{id}` como cualquier otro, y aparece en el listado con `type=CORRECTIVE_INVOICE` o `series=R`.
+- **Varias rectificativas.** Una factura puede tener varias, pero entre todas no pueden devolver más de lo facturado en cada línea: se lleva la cuenta de lo ya rectificado. Dos peticiones a la vez no pueden pasarse del total, porque el servidor bloquea la factura mientras comprueba y guarda.
+- **Es una factura más.** Al guardarla se publica el evento `invoice.issued`, igual que para cualquier factura, así que se encadena en `traceability-service` y se envía a la AEAT desde `submission-service`. Sus campos `delivery_note_id` y `order_id` son los de la factura original, y `total` es negativo. No se puede anular.
+- **Qué corrige y qué no.** Solo corrige **cantidades** (devoluciones o abonos). No cambia precios ni IVA: para eso habría que devolver la línea y facturarla de nuevo, algo que esta API no permite porque un albarán solo se factura una vez. Es una limitación conocida.
+
+| Respuesta | Código | Cuándo |
+|---|---|---|
+| `404` | `REFERENCE_NOT_FOUND` | La factura no existe, o el identificador es de un documento que no es una factura (un pedido, un albarán o una rectificativa) |
+| `422` | `INVALID_INVOICE_LINE` | `invoice_line` no es una línea de la factura |
+| `422` | `QUANTITY_EXCEEDED` | Lo devuelto, sumando las rectificativas anteriores, supera lo facturado |
+| `422` | `NOTHING_TO_CORRECT` | `lines` se omitió y la factura ya está rectificada por completo |
+| `422` | `VALIDATION_ERROR` | Falta `reason` o está vacío o es demasiado largo, `lines` está vacío o repite una línea, una cantidad no es mayor que cero o tiene más de 3 decimales, o hay un campo desconocido |
 
 #### `GET /api/v1/documents/{id}` (CU-4)
 
-Consulta un pedido, un albarán o una factura por su identificador. Los tres tipos se devuelven con **la misma forma**, y `type` indica de cuál se trata (`ORDER`, `DELIVERY_NOTE` o `INVOICE`). La consulta no modifica nada.
+Consulta un pedido, un albarán o una factura por su identificador. Los tres tipos se devuelven con **la misma forma**, y `type` indica de cuál se trata (`ORDER`, `DELIVERY_NOTE`, `INVOICE` o `CORRECTIVE_INVOICE`). La consulta no modifica nada.
 
 Respuesta `200` (un albarán):
 
@@ -393,9 +441,9 @@ Lista pedidos, albaranes y facturas. Todos los parámetros son opcionales y **lo
 
 | Parámetro | Filtra por |
 |---|---|
-| `type` | Tipo: `ORDER`, `DELIVERY_NOTE` o `INVOICE` |
+| `type` | Tipo: `ORDER`, `DELIVERY_NOTE`, `INVOICE` o `CORRECTIVE_INVOICE` |
 | `customer` | Cliente: el texto es su NIF/CIF exacto, o parte de su nombre (sin distinguir mayúsculas) |
-| `series` | Serie: `P`, `A` o `F` |
+| `series` | Serie: `P`, `A`, `F` o `R` |
 | `status` | Estado: `ISSUED` o `CANCELLED` |
 | `from`, `to` | Fecha de emisión, desde `from` hasta `to`, **ambas incluidas** |
 | `page` | Número de página, desde 1 (por defecto `1`) |
@@ -450,7 +498,7 @@ Qué se puede anular:
 |---|---|
 | Pedido | No tiene albaranes, o todos están anulados. Si tuviera alguno vivo, quedaría sin pedido: se anulan antes |
 | Albarán | No tiene factura |
-| Factura | **Nunca**: una factura emitida no se anula, solo se rectifica |
+| Factura | **Nunca**: una factura emitida no se anula, solo se rectifica (CU-8). Una rectificativa tampoco |
 
 Un documento que ya está anulado tampoco se puede anular otra vez.
 
@@ -494,7 +542,7 @@ La cadena es la del documento por el que se pregunta, desde su pedido hasta él 
 }
 ```
 
-Cada documento se compara con el **siguiente** de la cadena (pedido con albarán, albarán con factura). Cada línea se busca en el documento siguiente a través de `source_line`, que es como una línea dice de cuál viene, y han de coincidir tres campos: `quantity`, `unit_price` y `vat_rate`. Cada diferencia dice cuál es el campo, qué línea es y el valor en cada lado (`source` es el documento anterior, `target` el posterior). Una línea del documento anterior que el siguiente no tiene cuenta como cantidad `0`, con `line` a `null` en `target`. Las líneas del documento posterior que no vienen de ninguna del anterior no se comparan. Una cadena coherente devuelve `discrepancies` vacío.
+Cada documento se compara con el **siguiente** de la cadena (pedido con albarán, albarán con factura). Cada línea se busca en el documento siguiente a través de `source_line`, que es como una línea dice de cuál viene, y han de coincidir tres campos: `quantity`, `unit_price` y `vat_rate`. Cada diferencia dice cuál es el campo, qué línea es y el valor en cada lado (`source` es el documento anterior, `target` el posterior). Una línea del documento anterior que el siguiente no tiene cuenta como cantidad `0`, con `line` a `null` en `target`. Las líneas del documento posterior que no vienen de ninguna del anterior no se comparan. Una factura rectificativa (CU-8) tampoco se compara con la factura que rectifica, porque difiere de ella a propósito. Una cadena coherente devuelve `discrepancies` vacío.
 
 **Una entrega parcial es una diferencia.** Si el pedido era de 10 y el albarán entrega 4, aparece como diferencia de `quantity`. No tiene por qué ser un error (el resto se puede entregar en otro albarán), pero sí es una diferencia entre los documentos, y cada albarán se compara con el pedido por separado. Una cadena creada con esta API solo puede tener diferencias de ese tipo, porque el albarán copia el precio y el IVA del pedido y la factura copia lo que entregó el albarán. El resto de diferencias aparecen si algo modifica un documento después (un fallo o una escritura directa en la base de datos), que es lo que esta consulta detecta.
 

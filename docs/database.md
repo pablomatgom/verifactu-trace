@@ -97,8 +97,8 @@ La cadena de documentos se forma con `parent_id`: el albarán (CU-2) apunta a su
 | Columna | Tipo | Notas |
 |---|---|---|
 | `id` | `UUID` | Clave primaria, la asigna el servidor |
-| `type` | `VARCHAR(20)` | `ORDER`, `DELIVERY_NOTE` o `INVOICE`. Indexada |
-| `series` | `VARCHAR(10)` | `P` para los pedidos, `A` para los albaranes y `F` para las facturas. Indexada |
+| `type` | `VARCHAR(20)` | `ORDER`, `DELIVERY_NOTE`, `INVOICE` o `CORRECTIVE_INVOICE` (CU-8). Indexada |
+| `series` | `VARCHAR(10)` | `P` para los pedidos, `A` para los albaranes, `F` para las facturas y `R` para las rectificativas. Indexada |
 | `number` | `VARCHAR(40)` | **Único**, como `P-2026-000001`, `A-2026-000001` o `F-2026-000001` |
 | `status` | `VARCHAR(20)` | `ISSUED` o `CANCELLED` (CU-6). Indexada |
 | `issue_date` | `DATE` | La pone el servidor con la fecha de hoy. Indexada, junto con `number` |
@@ -106,6 +106,7 @@ La cadena de documentos se forma con `parent_id`: el albarán (CU-2) apunta a su
 | `customer_tax_id` | `VARCHAR(20)` | NIF/CIF del cliente. Indexada |
 | `total_net`, `total_vat`, `total` | `NUMERIC(12,2)` | Los calcula el servidor |
 | `parent_id` | `UUID` | Clave foránea a `documents.id`: el documento anterior de la cadena (el pedido, en un albarán, y el albarán, en una factura). Vacío en un pedido. En las facturas es **único**, porque un albarán se factura una vez |
+| `correction_reason` | `VARCHAR(300)` | Por qué se emitió una rectificativa (CU-8). Solo la tiene una rectificativa, cuyo `parent_id` es la factura que rectifica. No lleva el índice único de una factura por albarán, que solo cubre `INVOICE`, así que una factura puede tener varias |
 | `created_at` | `TIMESTAMPTZ` | Valor por defecto `now()` en la base de datos |
 
 **`document_lines`**: las líneas de un documento. Se borran con él (`ON DELETE CASCADE`).
@@ -117,7 +118,7 @@ La cadena de documentos se forma con `parent_id`: el albarán (CU-2) apunta a su
 | `source_line_id` | `UUID` | Clave foránea a `document_lines.id`: la línea del documento anterior que esta línea entrega o factura. Vacía en un pedido. Indexada |
 | `position` | `INTEGER` | Orden de la línea, desde 1 |
 | `description` | `VARCHAR(300)` | |
-| `quantity` | `NUMERIC(12,3)` | Mayor que cero, hasta 3 decimales |
+| `quantity` | `NUMERIC(12,3)` | Distinta de cero, hasta 3 decimales. Negativa solo en las líneas de una rectificativa; la API exige que sea mayor que cero en el resto de documentos |
 | `unit_price` | `NUMERIC(12,2)` | No negativo |
 | `vat_rate` | `NUMERIC(5,2)` | Entre 0 y 100 |
 
@@ -346,7 +347,7 @@ Los nombres de fichero deben ser únicos en todo `tests/`, porque las carpetas n
 ## Limitaciones conocidas
 
 - Los tres servicios usan la base de datos con el mismo patrón.
-- La primera migración (`0001`) está vacía: marca el punto de partida del historial. Las tablas llegan con las historias de usuario: `0002` crea las de los documentos (CU-1) y `0003` añade `source_line_id` a las líneas (CU-2) y `0004` el índice de una factura por albarán (CU-3) y `0005` y `0006` los índices del listado (CU-5).
+- La primera migración (`0001`) está vacía: marca el punto de partida del historial. Las tablas llegan con las historias de usuario: `0002` crea las de los documentos (CU-1) y `0003` añade `source_line_id` a las líneas (CU-2) y `0004` el índice de una factura por albarán (CU-3) y `0005` y `0006` los índices del listado (CU-5) y `0007` la columna del motivo de una rectificativa y la restricción de cantidad (CU-8).
 - Un número solo se devuelve con un *rollback*. Si se anula un documento ya guardado (CU-6), su número no se reutiliza, que es lo esperado en una numeración fiscal: el documento se conserva con el estado `CANCELLED`.
 - Las migraciones se aplican en cada arranque y no hay una marcha atrás automática. Una migración que falla a la mitad deja el contenedor reiniciándose hasta que se corrige.
 - `GET /health` falla cuando la base de datos no responde. Separar la comprobación de que el proceso está vivo de la de que está listo para atender se aborda en el hito de observabilidad.
