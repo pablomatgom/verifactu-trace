@@ -71,8 +71,10 @@ def test_filtering_by_status_returns_only_the_submissions_in_that_state(
     response = search(client, status="FAILED", size=100)
 
     listed = ids(response)
-    assert str(failed.id) in listed and str(failed_again.id) in listed
-    assert str(pending.id) not in listed and str(accepted.id) not in listed
+    assert str(failed.id) in listed
+    assert str(failed_again.id) in listed
+    assert str(pending.id) not in listed
+    assert str(accepted.id) not in listed
     assert {item["status"] for item in response.json()["items"]} == {"FAILED"}
 
 
