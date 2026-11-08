@@ -207,7 +207,7 @@ Esta sección define el contrato de la API que expone `verifactu-trace` a travé
 | `GET` | `/api/v1/documents/{id}` | Consulta un documento por identificador | CU-4 | `200`, `404`, `422` |
 | `GET` | `/api/v1/documents` | Lista documentos. Filtros: `type`, `customer`, `series`, `from`, `to`, `status` | CU-5 | `200`, `422` |
 | `POST` | `/api/v1/documents/{id}/cancel` | Anula un pedido o albarán no facturado | CU-6 (extra) | `200`, `404`, `409`, `422` |
-| `GET` | `/api/v1/documents/{id}/discrepancies` | Detecta diferencias entre pedido, albarán y factura | CU-7 (extra) | `200`, `404` |
+| `GET` | `/api/v1/documents/{id}/discrepancies` | Detecta diferencias entre pedido, albarán y factura | CU-7 (extra) | `200`, `404`, `422` |
 | `POST` | `/api/v1/invoices/{id}/corrections` | Emite una factura rectificativa | CU-8 (extra) | `201`, `404`, `422` |
 
 #### `POST /api/v1/orders` (CU-1)
@@ -468,6 +468,40 @@ Un documento que ya está anulado tampoco se puede anular otra vez.
 Una anulación y una petición que se apoya en el mismo documento (un albarán de ese pedido, una factura de ese albarán) a la vez no se pisan: la anulación bloquea el documento, y la otra petición espera y ve su resultado. O la anulación va primero y la otra se rechaza con `REFERENCE_CANCELLED`, o va después y se rechaza la anulación.
 
 La anulación **no publica ningún evento**: `traceability-service` solo registra las facturas, y estas no se pueden anular.
+
+#### `GET /api/v1/documents/{id}/discrepancies` (CU-7)
+
+Compara, línea a línea, los documentos de la cadena de `{id}` para detectar diferencias antes de que lleguen a la contabilidad. La consulta no modifica nada.
+
+La cadena es la del documento por el que se pregunta, desde su pedido hasta él mismo: con el id de una **factura** se comparan el pedido, el albarán y la factura; con el de un albarán, el pedido y el albarán; y con el de un pedido no hay nada con lo que compararlo.
+
+```json
+{
+  "document_id": "5d2e8a6c-1f40-4b9a-9c77-3e0a6b4d1f52",
+  "compared": [
+    { "type": "ORDER", "id": "3f1c0b7a-...", "number": "P-2026-000008" },
+    { "type": "DELIVERY_NOTE", "id": "9a7b2d1e-...", "number": "A-2026-000008" },
+    { "type": "INVOICE", "id": "5d2e8a6c-...", "number": "F-2026-000006" }
+  ],
+  "discrepancies": [
+    {
+      "field": "quantity",
+      "description": "Widget",
+      "source": { "document_type": "ORDER", "number": "P-2026-000008", "line": 1, "value": 10.0 },
+      "target": { "document_type": "DELIVERY_NOTE", "number": "A-2026-000008", "line": 1, "value": 4.0 }
+    }
+  ]
+}
+```
+
+Cada documento se compara con el **siguiente** de la cadena (pedido con albarán, albarán con factura). Cada línea se busca en el documento siguiente a través de `source_line`, que es como una línea dice de cuál viene, y han de coincidir tres campos: `quantity`, `unit_price` y `vat_rate`. Cada diferencia dice cuál es el campo, qué línea es y el valor en cada lado (`source` es el documento anterior, `target` el posterior). Una línea del documento anterior que el siguiente no tiene cuenta como cantidad `0`, con `line` a `null` en `target`. Las líneas del documento posterior que no vienen de ninguna del anterior no se comparan. Una cadena coherente devuelve `discrepancies` vacío.
+
+**Una entrega parcial es una diferencia.** Si el pedido era de 10 y el albarán entrega 4, aparece como diferencia de `quantity`. No tiene por qué ser un error (el resto se puede entregar en otro albarán), pero sí es una diferencia entre los documentos, y cada albarán se compara con el pedido por separado. Una cadena creada con esta API solo puede tener diferencias de ese tipo, porque el albarán copia el precio y el IVA del pedido y la factura copia lo que entregó el albarán. El resto de diferencias aparecen si algo modifica un documento después (un fallo o una escritura directa en la base de datos), que es lo que esta consulta detecta.
+
+| Respuesta | Código | Cuándo |
+|---|---|---|
+| `404` | `DOCUMENT_NOT_FOUND` | No existe un documento con ese id |
+| `422` | `VALIDATION_ERROR` | El id no es un UUID |
 
 ### traceability-service
 
