@@ -44,5 +44,7 @@ def test_the_database_accepts_a_negative_quantity_for_the_lines_of_a_corrective_
 
 
 def test_the_database_still_rejects_a_quantity_of_zero(session: Session):
+    document = document_with_quantity(Decimal(0), "T-2026-900002")
+
     with pytest.raises(IntegrityError, match="ck_document_lines_quantity_not_zero"):
-        document_repository.add(session, document_with_quantity(Decimal(0), "T-2026-900002"))
+        document_repository.add(session, document)

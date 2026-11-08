@@ -39,6 +39,39 @@ def _plain(quantity: Decimal) -> str:
     return f"{quantity.normalize():f}"
 
 
+def _everything_pending(
+    invoice: Document, corrected: dict[uuid.UUID, Decimal]
+) -> list[tuple[DocumentLine, Decimal]]:
+    """What is left to take back of every line of the invoice, for a request without lines."""
+    pending = [(line, line.quantity - corrected.get(line.id, Decimal(0))) for line in invoice.lines]
+    taken_back = [(line, quantity) for line, quantity in pending if quantity > 0]
+    if not taken_back:
+        raise NothingToCorrect(f"invoice {invoice.number} has already been fully rectified")
+    return taken_back
+
+
+def _requested(
+    invoice: Document, corrected: dict[uuid.UUID, Decimal], requested: list[CorrectedLineData]
+) -> list[tuple[DocumentLine, Decimal]]:
+    """The lines the request takes back, checked against what is left of each one."""
+    invoice_lines = {line.position: line for line in invoice.lines}
+    taken_back = []
+    for item in requested:
+        line = invoice_lines.get(item.invoice_line)
+        if line is None:
+            raise InvalidInvoiceLine(f"the invoice has no line {item.invoice_line}")
+        already = corrected.get(line.id, Decimal(0))
+        pending = line.quantity - already
+        if item.quantity > pending:
+            raise QuantityExceeded(
+                f"line {item.invoice_line}: {_plain(item.quantity)} to correct but "
+                f"only {_plain(pending)} left (billed {_plain(line.quantity)}, "
+                f"already corrected {_plain(already)})"
+            )
+        taken_back.append((line, item.quantity))
+    return taken_back
+
+
 def create_correction(
     session: Session, publisher: EventPublisher, data: CorrectionData
 ) -> Document:
@@ -54,31 +87,11 @@ def create_correction(
     if invoice is None:
         raise ReferenceNotFound(f"invoice {data.invoice_id} does not exist")
 
-    invoice_lines = {line.position: line for line in invoice.lines}
     corrected = document_repository.corrected_quantities(session, invoice.id)
-
-    taken_back: list[tuple[DocumentLine, Decimal]] = []
     if data.lines is None:
-        for line in invoice.lines:
-            pending = line.quantity - corrected.get(line.id, Decimal(0))
-            if pending > 0:
-                taken_back.append((line, pending))
-        if not taken_back:
-            raise NothingToCorrect(f"invoice {invoice.number} has already been fully rectified")
+        taken_back = _everything_pending(invoice, corrected)
     else:
-        for requested in data.lines:
-            line = invoice_lines.get(requested.invoice_line)
-            if line is None:
-                raise InvalidInvoiceLine(f"the invoice has no line {requested.invoice_line}")
-            already = corrected.get(line.id, Decimal(0))
-            pending = line.quantity - already
-            if requested.quantity > pending:
-                raise QuantityExceeded(
-                    f"line {requested.invoice_line}: {_plain(requested.quantity)} to correct but "
-                    f"only {_plain(pending)} left (billed {_plain(line.quantity)}, "
-                    f"already corrected {_plain(already)})"
-                )
-            taken_back.append((line, requested.quantity))
+        taken_back = _requested(invoice, corrected, data.lines)
 
     today = date.today()
     series = SERIES[DocumentType.CORRECTIVE_INVOICE]
