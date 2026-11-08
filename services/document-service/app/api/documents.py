@@ -7,6 +7,9 @@ from sqlalchemy.orm import Session
 
 from app.api.schemas.common import error_response
 from app.api.schemas.documents import (
+    ComparedDocument,
+    DiscrepancyRead,
+    DiscrepancyReport,
     DocumentLineOut,
     DocumentPageRead,
     DocumentRead,
@@ -16,7 +19,7 @@ from app.api.schemas.orders import CustomerOut
 from app.db import get_session
 from app.models import Document, DocumentStatus, DocumentType
 from app.repositories.document_repository import DocumentFilters
-from app.services import document_service
+from app.services import discrepancy_service, document_service
 
 router = APIRouter(prefix="/api/v1/documents", tags=["documents"])
 
@@ -191,3 +194,41 @@ def cancel_document(
     without its order.
     """
     return _to_read(document_service.cancel_document(session, document_id))
+
+
+@router.get(
+    "/{document_id}/discrepancies",
+    summary="Find the discrepancies of a chain",
+    response_description="The documents that were compared and the lines that do not match.",
+    responses={
+        404: error_response("The document does not exist (code DOCUMENT_NOT_FOUND)."),
+        422: error_response("The identifier is not a valid UUID (code VALIDATION_ERROR)."),
+    },
+)
+def get_discrepancies(
+    document_id: uuid.UUID, session: Annotated[Session, Depends(get_session)]
+) -> DiscrepancyReport:
+    """Compare the order, the delivery note and the invoice of a chain, line by line.
+
+    The chain is the one of the document asked about, from its order to itself: an invoice gives
+    the three documents, a delivery note two and an order one. Each document is compared with the
+    next one, and every line must have the same quantity, unit price and VAT as the line it comes
+    from. A line that the next document lacks counts as a quantity of zero.
+
+    A delivery note that delivers less than the order asked for shows up here, as a difference
+    in quantity: it is not necessarily a mistake (the rest may be delivered later), but it is a
+    difference. A coherent chain has an empty list. A chain made through this API is coherent,
+    except for such partial deliveries; the check is there for what changes a document afterwards.
+    """
+    result = discrepancy_service.find_discrepancies(session, document_id)
+    return DiscrepancyReport(
+        document_id=document_id,
+        compared=[
+            ComparedDocument(type=document.type, id=document.id, number=document.number)
+            for document in result.compared
+        ],
+        discrepancies=[
+            DiscrepancyRead.model_validate(difference, from_attributes=True)
+            for difference in result.discrepancies
+        ],
+    )
