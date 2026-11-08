@@ -27,11 +27,8 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements-dev.txt
 
-      - name: Lint
-        run: ruff check .
-
-      - name: Check formatting
-        run: ruff format --check .
+      - name: Lint and check the formatting
+        run: make lint
 
   test:
     name: Test (${{ matrix.service }})
@@ -84,8 +81,10 @@ jobs:
       - name: Install dependencies
         run: pip install -r ../../requirements-dev.txt
 
+      # The default folder of this job is the service's; the Makefile is at the root.
       - name: Run tests
-        run: python -m pytest
+        working-directory: .
+        run: make test SERVICE=${{ matrix.service }}
 
   integration:
     name: Integration Validation (Docker Compose)
@@ -99,7 +98,7 @@ jobs:
 
       # --wait blocks until every container with a healthcheck is healthy, or fails.
       - name: Start the system
-        run: docker compose up --build --wait --wait-timeout 180
+        run: make up
 
       - name: Check the services
         run: |
