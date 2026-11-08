@@ -166,3 +166,21 @@ def live_delivery_notes(session: Session, order_id: uuid.UUID) -> list[str]:
         .order_by(Document.number)
     )
     return list(session.scalars(query))
+
+
+def corrected_quantities(session: Session, invoice_id: uuid.UUID) -> dict[uuid.UUID, Decimal]:
+    """How much of each invoice line the corrective invoices have already taken back.
+
+    Keyed by the invoice line id, with a positive quantity (the lines of a corrective invoice have a
+    negative one). Lines that were not corrected are not in the result.
+    """
+    query = (
+        select(DocumentLine.source_line_id, -func.sum(DocumentLine.quantity))
+        .join(Document, DocumentLine.document_id == Document.id)
+        .where(
+            Document.parent_id == invoice_id,
+            Document.type == DocumentType.CORRECTIVE_INVOICE,
+        )
+        .group_by(DocumentLine.source_line_id)
+    )
+    return dict(session.execute(query).all())

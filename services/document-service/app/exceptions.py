@@ -66,3 +66,15 @@ class ReferenceCancelled(DomainError):
     """The document the request refers to was cancelled, so nothing new can come from it."""
 
     code = "REFERENCE_CANCELLED"
+
+
+class InvalidInvoiceLine(DomainError):
+    """The request refers to a line that the invoice does not have."""
+
+    code = "INVALID_INVOICE_LINE"
+
+
+class NothingToCorrect(DomainError):
+    """Everything on the invoice has already been rectified, so there is nothing left to correct."""
+
+    code = "NOTHING_TO_CORRECT"

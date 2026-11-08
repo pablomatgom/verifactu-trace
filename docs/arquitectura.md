@@ -99,6 +99,8 @@ Una petición con el formato correcto que rompe una regla (un pedido que no exis
 | `ReferenceNotFound` | `REFERENCE_NOT_FOUND` | `404` |
 | `DocumentNotFound` | `DOCUMENT_NOT_FOUND` | `404` |
 | `InvalidOrderLine` | `INVALID_ORDER_LINE` | `422` |
+| `InvalidInvoiceLine` | `INVALID_INVOICE_LINE` | `422` |
+| `NothingToCorrect` | `NOTHING_TO_CORRECT` | `422` |
 | `InvalidDateRange` | `INVALID_DATE_RANGE` | `422` |
 | `QuantityExceeded` | `QUANTITY_EXCEEDED` | `422` |
 | `DeliveryNoteAlreadyInvoiced` | `DELIVERY_NOTE_ALREADY_INVOICED` | `422` |
@@ -158,7 +160,7 @@ FastAPI documenta por defecto el `422` con su propio formato (`{"detail": [...]}
 
 ## Limitaciones conocidas
 
-- Los tres servicios tienen ya las capas con la estructura creada: `document-service` (CU-1 a CU-7), `traceability-service` (CU-9 a CU-12) y `submission-service` (CU-13 a CU-16).
+- Los tres servicios tienen ya las capas con la estructura creada: `document-service` (CU-1 a CU-8), `traceability-service` (CU-9 a CU-12) y `submission-service` (CU-13 a CU-16).
 - Los mensajes de los errores están en inglés y no se traducen.
 - **La cadena documental (CU-11) es la única consulta que depende de otro servicio.** `traceability-service` no guarda los documentos, solo sus eventos, así que la reconstruye pidiendo a `document-service` la factura, su albarán y su pedido por HTTP, siguiendo `parent_id`. Si `document-service` cae, esa consulta responde `503` (con 3 segundos de espera como máximo), mientras que el registro, la verificación y el histórico de eventos siguen funcionando. Se descartó guardar copias de los documentos en este servicio por la duplicación y porque podrían quedar desactualizadas. La consulta sale como máximo en tres peticiones, una por documento.
 - **La cadena de hashes detecta la manipulación, pero no la impide ni la detecta en el último evento.** Cualquiera con acceso a la base de datos puede hacer un `UPDATE` o un `DELETE`; la verificación (CU-10) lo descubre después, salvo si se borran los últimos eventos o se reescribe el último con su hash recalculado, porque ningún evento posterior responde por ellos. La solución habitual es guardar el último hash de cada cadena fuera de esta base de datos (un servicio externo de sellado, o un registro que solo admita añadir). No está hecho en este hito. Tampoco hay nada que impida modificar los eventos desde la base de datos, como un *trigger* o un usuario sin permisos de `UPDATE` y `DELETE`.
