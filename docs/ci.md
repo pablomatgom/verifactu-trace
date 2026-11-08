@@ -41,7 +41,13 @@ Con `REDIS_URL` y un contenedor `redis:7-alpine` (healthcheck `redis-cli ping`) 
 
 ### Qué hacen los tests
 
-Cada servicio tiene sus pruebas en `tests/` y las ejecuta `pytest`. `submission-service` cubre las migraciones, los estados y los reintentos de un envío (con esperas crecientes, intentos agotados y envíos perdidos), la AEAT simulada, `POST /api/v1/submissions`, el consumidor del *stream* contra un Redis real, el proceso de envío y el flujo completo de un evento hasta su aceptación. `traceability-service` cubre además las migraciones, el cálculo del hash, el encadenado de eventos (con su concurrencia), `POST /api/v1/traceability/events` y el consumidor del *stream* contra un Redis real. Los de `document-service` cubren además las migraciones, el contador de numeración, el cálculo de importes, `POST /api/v1/orders`, `POST /api/v1/delivery-notes` y `POST /api/v1/invoices`, con la concurrencia de los albaranes y de las facturas y la publicación del evento (ver [`database.md`](database.md)), y crecerán con cada historia de usuario. Usan el cliente de pruebas de FastAPI (`TestClient`), que llama a la aplicación sin levantar un servidor.
+Cada servicio tiene sus pruebas en `tests/` y las ejecuta `pytest`. Cubren las migraciones, los endpoints de todos los casos de uso y las reglas de negocio de cada servicio:
+
+- **`document-service`**: la numeración correlativa sin huecos, el cálculo de importes, los pedidos, albaranes, facturas y rectificativas con sus límites de cantidad, la consulta y el listado, la anulación, las discrepancias entre documentos y la publicación del evento `invoice.issued`. Las peticiones simultáneas a un mismo albarán, factura o pedido se prueban con transacciones que se confirman de verdad.
+- **`traceability-service`**: el cálculo y el encadenado de los hashes (con su concurrencia), la verificación de la cadena con eventos alterados, sustituidos o borrados, el histórico, la cadena documental (con un cliente HTTP probado contra un servidor local) y el consumidor del *stream* contra un Redis real.
+- **`submission-service`**: los estados y los reintentos de un envío (esperas crecientes, intentos agotados, envíos perdidos y reintento manual), la AEAT simulada, las consultas y el listado paginado, el consumidor del *stream* contra un Redis real, el proceso de envío y el flujo completo de un evento hasta su aceptación.
+
+Usan el cliente de pruebas de FastAPI (`TestClient`), que llama a la aplicación sin levantar un servidor. Los niveles de pruebas y los ejemplos de cada regla están en [`hito2.md`](hito2.md), y la parte de bases de datos en [`database.md`](database.md).
 
 `pytest` se lanza **por servicio**, desde su carpeta, y no una sola vez desde la raíz. Los tres servicios tienen un paquete llamado `app`, y al ejecutarlos juntos Python solo importaría uno de ellos. La carpeta de cada servicio se añade al `pythonpath` mediante su `pyproject.toml`.
 
@@ -57,7 +63,7 @@ Las pruebas unitarias comprueban cada servicio por separado. El trabajo `integra
 6. Si algo falla, muestra los logs de todos los contenedores.
 7. Siempre, al terminar, apaga el sistema y elimina los volúmenes (`docker compose down -v`).
 
-Con ello se valida además el propio `compose.yaml`: las redes, el orden de arranque y las comprobaciones de salud. Cuando existan historias de usuario con base de datos, se ampliará con pruebas reales de la API sobre este mismo entorno.
+Con ello se valida además el propio `compose.yaml`: las redes, el orden de arranque y las comprobaciones de salud. Las pruebas de la API contra PostgreSQL y Redis las hace el trabajo `test`; este comprueba solo que las piezas arrancan y se conectan entre sí.
 
 ### Decisiones de diseño
 
@@ -166,9 +172,8 @@ GHCR crea cada paquete como **privado** la primera vez que se publica. Si las im
 
 - Las imágenes no se escanean en busca de vulnerabilidades. Se aborda en el hito de seguridad junto con el *lockfile* con hashes descrito en [`docker.md`](docker.md).
 - Los SHA de las acciones se actualizan a mano. Dependabot podría proponer las actualizaciones automáticamente.
-- Los tests no miden cobertura. Se puede añadir cuando haya lógica de negocio que cubrir.
+- Los tests no miden cobertura. Se podría añadir un informe (por ejemplo con `pytest-cov`) ahora que los tres servicios tienen lógica de negocio que cubrir.
 - Los workflows no definen `timeout-minutes` ni `concurrency`. Un trabajo colgado consume minutos hasta el límite de GitHub, y varios push seguidos a la misma rama lanzan ejecuciones que no se cancelan entre sí.
-- La prueba de integración solo comprueba que el sistema arranca, que los esquemas existen y que `document-service` ha aplicado su migración. Las pruebas de Redis las hace el trabajo `test`, no este.
-- Los contenedores de PostgreSQL y de Redis del trabajo `test` se levantan para los tres servicios de la matriz, aunque de momento solo `document-service` los usa.
+- La prueba de integración solo comprueba que el sistema arranca, que los esquemas existen y que los tres servicios han aplicado sus migraciones. Las pruebas de Redis las hace el trabajo `test`, no este.
 - El trabajo `integration` reconstruye las imágenes en cada ejecución, sin la caché de capas que sí usa `docker.yml`.
 - El trabajo `integration` tiene `timeout-minutes: 10`. Los demás trabajos del repositorio todavía no definen límite de tiempo.

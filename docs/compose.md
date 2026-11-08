@@ -37,8 +37,8 @@ docker compose exec postgres psql -U verifactu -d verifactu   # consola de Postg
 |---|---|---|
 | `postgres` | `postgres:17-alpine` | Base de datos, con un esquema por servicio |
 | `redis` | `redis:7-alpine` | Cola de eventos entre servicios |
-| `document-service` | construida desde `services/document-service` | Pedidos, albaranes y facturas |
-| `traceability-service` | construida desde `services/traceability-service` | Cadena de hashes y auditoría. Lee el *stream* `invoice.issued` de Redis |
+| `document-service` | construida desde `services/document-service` | Pedidos, albaranes, facturas y rectificativas |
+| `traceability-service` | construida desde `services/traceability-service` | Cadena de hashes y auditoría. Lee el *stream* `invoice.issued` de Redis y consulta a `document-service` la cadena documental de una factura |
 | `submission-service` | construida desde `services/submission-service` | Envío a la AEAT simulada, con reintentos. Lee el *stream* `invoice.issued` de Redis. Cómo responde la AEAT simulada se configura en `.env` (ver el README) |
 
 ## Decisiones de diseño
@@ -60,7 +60,7 @@ docker compose exec postgres psql -U verifactu -d verifactu   # consola de Postg
 
 Una única instancia de PostgreSQL aloja un esquema por servicio (`documents`, `traceability` y `submissions`). Los crea el script [`db/init/01-schemas.sql`](../db/init/01-schemas.sql), que PostgreSQL ejecuta **solo la primera vez**, cuando el volumen de datos está vacío. Si modificas el script y no ves ningún cambio, es porque el volumen `postgres-data` ya contiene datos y PostgreSQL no vuelve a ejecutarlo. Para forzarlo hay que eliminar el volumen con `docker compose down -v`, lo que **borra los datos** de la base de datos.
 
-Cada servicio recibe en sus variables de entorno la URL de conexión (`DATABASE_URL`), su esquema (`DATABASE_SCHEMA`) y la URL de Redis (`REDIS_URL`). De momento solo `document-service` las utiliza: aplica sus migraciones al arrancar (ver [`database.md`](database.md)) y publica en Redis el evento `invoice.issued` al emitir una factura (ver [`arquitectura.md`](arquitectura.md)). Los otros dos las recibirán cuando necesiten base de datos o consumir eventos.
+Cada servicio recibe en sus variables de entorno la URL de conexión (`DATABASE_URL`), su esquema (`DATABASE_SCHEMA`) y la URL de Redis (`REDIS_URL`). Los tres las utilizan: aplican sus migraciones al arrancar (ver [`database.md`](database.md)); `document-service` publica en Redis el evento `invoice.issued` al emitir una factura, y `traceability-service` y `submission-service` lo leen (ver [`arquitectura.md`](arquitectura.md)). Además, `traceability-service` recibe `DOCUMENT_SERVICE_URL` (`http://document-service:8001`), la dirección donde pide los documentos para reconstruir una cadena documental.
 
 Si la contraseña de `.env` contiene caracteres especiales, deben codificarse como URL en `DATABASE_URL`.
 

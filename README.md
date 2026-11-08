@@ -5,7 +5,7 @@ Aplicación nativa de la nube para la emisión y la trazabilidad de facturación
 [![CI](https://github.com/pablomatgom/verifactu-trace/actions/workflows/ci.yml/badge.svg)](https://github.com/pablomatgom/verifactu-trace/actions/workflows/ci.yml)
 [![Docker](https://github.com/pablomatgom/verifactu-trace/actions/workflows/docker.yml/badge.svg)](https://github.com/pablomatgom/verifactu-trace/actions/workflows/docker.yml)
 
-> **Estado:** Hito 1 completado. Hito 2 (empaquetado cloud native, entorno local e integración continua) en curso.
+> **Estado:** Hito 1 completado. Hito 2 (empaquetado cloud native, entorno local e integración continua) completado: los 16 casos de uso están implementados, el sistema completo se levanta con Docker Compose y el CI valida el código y publica las imágenes. Las decisiones del hito están en [`docs/hito2.md`](docs/hito2.md).
 
 ## Índice
 
@@ -975,7 +975,7 @@ docker compose down -v      # detiene el sistema y borra los datos
 PostgreSQL y Redis solo son accesibles desde los demás contenedores, y los puertos de los servicios se publican únicamente en `127.0.0.1`. Las redes, los volúmenes y las decisiones de diseño están en [`docs/compose.md`](docs/compose.md).
 ### Pruebas y linter
 
-Las pruebas se ejecutan por servicio, porque todos usan el paquete `app`. Las de `document-service` necesitan una PostgreSQL y leen su URL de `DATABASE_URL`; sin ella, las que dependen de la base de datos se omiten (ver [`docs/database.md`](docs/database.md)):
+Las pruebas se ejecutan por servicio, porque los tres usan el paquete `app`. Necesitan una PostgreSQL y una Redis, cuyas URLs leen de `DATABASE_URL` y `REDIS_URL`; sin ellas, las pruebas que dependen de esos servicios se omiten en local y fallan en el CI (ver [`docs/database.md`](docs/database.md)).
 
 Los comandos se lanzan con un [`Makefile`](Makefile) en la raíz, que es el **gestor de tareas** del proyecto y el mismo que usa el CI:
 
