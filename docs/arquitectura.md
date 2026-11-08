@@ -102,8 +102,10 @@ Una petición con el formato correcto que rompe una regla (un pedido que no exis
 | `InvalidDateRange` | `INVALID_DATE_RANGE` | `422` |
 | `QuantityExceeded` | `QUANTITY_EXCEEDED` | `422` |
 | `DeliveryNoteAlreadyInvoiced` | `DELIVERY_NOTE_ALREADY_INVOICED` | `422` |
+| `ReferenceCancelled` | `REFERENCE_CANCELLED` | `422` |
+| `DocumentNotCancellable` | `DOCUMENT_NOT_CANCELLABLE` | `409` |
 
-Un solo manejador (`domain_error_handler`) sirve para todas: responde `404` para las que heredan de `NotFound` (`ReferenceNotFound`, cuando la petición se refiere a un documento que no existe, y `DocumentNotFound`, cuando se consulta uno) y `422` para el resto. Una excepción nueva solo necesita su `code` y heredar de `DomainError` (o de `NotFound`, si debe responder `404`). Como el servicio lanza la excepción antes de guardar nada, la petición rechazada no consume número de la serie.
+Un solo manejador (`domain_error_handler`) sirve para todas: responde `404` para las que heredan de `NotFound` (`ReferenceNotFound`, cuando la petición se refiere a un documento que no existe, y `DocumentNotFound`, cuando se consulta uno) `409` para las que heredan de `Conflict` (la petición choca con el estado del documento, como anular uno que ya tiene factura) y `422` para el resto. Una excepción nueva solo necesita su `code` y heredar de `DomainError` (o de `NotFound` o `Conflict`, si debe responder `404` o `409`). Como el servicio lanza la excepción antes de guardar nada, la petición rechazada no consume número de la serie.
 
 `traceability-service` y `submission-service` usan una variante más sencilla: cada subclase de `DomainError` lleva también su `status_code` (por ejemplo `EventsNotFound` es `404` y `SubmissionAlreadyExists` es `409`), y su manejador responde con el de la excepción, sin ninguna clase base intermedia como `NotFound`.
 
@@ -156,7 +158,7 @@ FastAPI documenta por defecto el `422` con su propio formato (`{"detail": [...]}
 
 ## Limitaciones conocidas
 
-- Los tres servicios tienen ya las capas con la estructura creada: `document-service` (CU-1 a CU-5), `traceability-service` (CU-9 a CU-12) y `submission-service` (CU-13 a CU-16).
+- Los tres servicios tienen ya las capas con la estructura creada: `document-service` (CU-1 a CU-6), `traceability-service` (CU-9 a CU-12) y `submission-service` (CU-13 a CU-16).
 - Los mensajes de los errores están en inglés y no se traducen.
 - **La cadena documental (CU-11) es la única consulta que depende de otro servicio.** `traceability-service` no guarda los documentos, solo sus eventos, así que la reconstruye pidiendo a `document-service` la factura, su albarán y su pedido por HTTP, siguiendo `parent_id`. Si `document-service` cae, esa consulta responde `503` (con 3 segundos de espera como máximo), mientras que el registro, la verificación y el histórico de eventos siguen funcionando. Se descartó guardar copias de los documentos en este servicio por la duplicación y porque podrían quedar desactualizadas. La consulta sale como máximo en tres peticiones, una por documento.
 - **La cadena de hashes detecta la manipulación, pero no la impide ni la detecta en el último evento.** Cualquiera con acceso a la base de datos puede hacer un `UPDATE` o un `DELETE`; la verificación (CU-10) lo descubre después, salvo si se borran los últimos eventos o se reescribe el último con su hash recalculado, porque ningún evento posterior responde por ellos. La solución habitual es guardar el último hash de cada cadena fuera de esta base de datos (un servicio externo de sellado, o un registro que solo admita añadir). No está hecho en este hito. Tampoco hay nada que impida modificar los eventos desde la base de datos, como un *trigger* o un usuario sin permisos de `UPDATE` y `DELETE`.
