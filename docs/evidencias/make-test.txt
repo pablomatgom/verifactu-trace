@@ -1,0 +1,19 @@
+# Evidencia: make lint y make test (salida resumida)
+# Ejecutado en un contenedor python:3.12 con PostgreSQL 17 y Redis 7 desechables, sobre main (b4c825a).
+# make no esta instalado en el Windows de desarrollo; el CI lanza los mismos objetivos en ubuntu-24.04.
+
+Python 3.12.16
+
+$ make lint
+ruff check .
+All checks passed!
+ruff format --check .
+166 files already formatted
+
+$ make test
+==> document-service
+============================= 220 passed in 9.20s ==============================
+==> traceability-service
+============================= 141 passed in 9.81s ==============================
+==> submission-service
+============================= 137 passed in 2.69s ==============================

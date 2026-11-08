@@ -1,0 +1,18 @@
+# Evidencia: imagenes publicadas en GitHub Container Registry
+# Consultado sin credenciales (API anonima del registro) el 2026-11-08, sobre main (b4c825a).
+
+$ docker manifest inspect ghcr.io/pablomatgom/verifactu-trace/document-service:latest   # sin iniciar sesion
+OK: la imagen es publica y se puede descargar
+26 etiquetas: latest + 25 del tipo sha-<commit>
+latest: True | sha-b4c825a (main actual): True
+
+$ docker manifest inspect ghcr.io/pablomatgom/verifactu-trace/traceability-service:latest   # sin iniciar sesion
+OK: la imagen es publica y se puede descargar
+26 etiquetas: latest + 25 del tipo sha-<commit>
+latest: True | sha-b4c825a (main actual): True
+
+$ docker manifest inspect ghcr.io/pablomatgom/verifactu-trace/submission-service:latest   # sin iniciar sesion
+OK: la imagen es publica y se puede descargar
+26 etiquetas: latest + 25 del tipo sha-<commit>
+latest: True | sha-b4c825a (main actual): True
+
