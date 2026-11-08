@@ -3,7 +3,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
 from app.api.schemas.common import ErrorBody, ErrorResponse
-from app.exceptions import DomainError, NotFound
+from app.exceptions import Conflict, DomainError, NotFound
 
 
 def _describe(error: dict) -> str:
@@ -31,9 +31,15 @@ def validation_error_handler(request: Request, exc: RequestValidationError) -> J
 def domain_error_handler(request: Request, exc: DomainError) -> JSONResponse:
     """Answer a business rule error with the common error body.
 
-    Something that does not exist is a 404; any other broken rule is a 422.
+    Something that does not exist is a 404, a request that clashes with the state of the document
+    is a 409, and any other broken rule is a 422.
     """
-    status_code = 404 if isinstance(exc, NotFound) else 422
+    if isinstance(exc, NotFound):
+        status_code = 404
+    elif isinstance(exc, Conflict):
+        status_code = 409
+    else:
+        status_code = 422
     body = ErrorResponse(error=ErrorBody(code=exc.code, message=exc.message))
     return JSONResponse(status_code=status_code, content=body.model_dump())
 

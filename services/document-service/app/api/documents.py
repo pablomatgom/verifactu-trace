@@ -160,3 +160,34 @@ def get_document(
     # Construct the response here while the session is still active to
     # avoid database errors when accessing lazy-loaded relationships later.
     return _to_read(document_service.get_document(session, document_id))
+
+
+@router.post(
+    "/{document_id}/cancel",
+    summary="Cancel an order or a delivery note",
+    response_description="The document, now CANCELLED.",
+    responses={
+        404: error_response("The document does not exist (code DOCUMENT_NOT_FOUND)."),
+        409: error_response(
+            "The document cannot be cancelled (code DOCUMENT_NOT_CANCELLABLE): it is an invoice, "
+            "it is already cancelled, it is a delivery note with an invoice, or it is an order "
+            "with delivery notes that are not cancelled."
+        ),
+        422: error_response("The identifier is not a valid UUID (code VALIDATION_ERROR)."),
+    },
+)
+def cancel_document(
+    document_id: uuid.UUID, session: Annotated[Session, Depends(get_session)]
+) -> DocumentRead:
+    """Cancel an order or a delivery note that has not been invoiced, to correct a mistake.
+
+    The document is kept, with the status `CANCELLED`, and cannot be used again: no delivery note
+    can be made from a cancelled order, and no invoice from a cancelled delivery note. Cancelling a
+    delivery note frees the quantities it delivered, so they can be delivered again.
+
+    It is refused with a 409 if the document is an invoice (an issued invoice is rectified, not
+    cancelled), if it is already cancelled, if it is a delivery note that already has an invoice,
+    or if it is an order that still has delivery notes: cancel those first, so none is left
+    without its order.
+    """
+    return _to_read(document_service.cancel_document(session, document_id))
