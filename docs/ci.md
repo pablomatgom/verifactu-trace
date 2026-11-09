@@ -6,20 +6,21 @@ La integración continua se define en dos workflows de GitHub Actions, en `.gith
 
 | Workflow | Fichero | Qué comprueba |
 |---|---|---|
-| CI | [`ci.yml`](../.github/workflows/ci.yml) | Calidad del código Python: lint, formato y tests |
+| CI | [`ci.yml`](../.github/workflows/ci.yml) | Calidad del código Python (lint, formato y tests) y validación del código de Terraform |
 | Docker | [`docker.yml`](../.github/workflows/docker.yml) | Calidad de los Dockerfiles y construcción y publicación de las imágenes |
 
 Ambos se lanzan en cada pull request hacia `main` y en cada push a `main`. `docker.yml` también se lanza al subir un tag `v*`.
 
-## CI: lint y tests
+## CI: lint, tests y Terraform
 
-`ci.yml` tiene tres trabajos independientes, que se ejecutan en paralelo: `lint`, `test` e `integration`. Si uno falla, los otros terminan igualmente y se ven todos los resultados.
+`ci.yml` tiene cuatro trabajos independientes, que se ejecutan en paralelo: `lint`, `terraform`, `test` e `integration`. Si uno falla, los otros terminan igualmente y se ven todos los resultados.
 
 ### Trabajos
 
 | Trabajo | Qué hace | Comando |
 |---|---|---|
 | `lint` | Comprueba el estilo y los errores comunes, y que el código está formateado | `make lint` (`ruff check .` y `ruff format --check .`) |
+| `terraform` | Comprueba el formato y la validez del código de `infra/`, sin credenciales ni estado | `terraform fmt -check`, `terraform init -backend=false` y `terraform validate` (ver [`terraform.md`](terraform.md)) |
 | `test` | Ejecuta las pruebas de un servicio, con una PostgreSQL y una Redis desechables como servicios del trabajo. Una instancia por servicio (`document-service`, `traceability-service` y `submission-service`) | `make test SERVICE=<servicio>` (`python -m pytest` desde `services/<servicio>` |
 | `integration` | Levanta el sistema completo con Docker Compose y comprueba que los cinco contenedores funcionan juntos | `make up` (`docker compose up --build --wait`) |
 
