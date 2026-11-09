@@ -926,9 +926,10 @@ services/
 ├── document-service/        # puerto 8001
 ├── traceability-service/    # puerto 8002
 └── submission-service/      # puerto 8003
+infra/                       # infraestructura en la nube con Terraform
 ```
 
-Cada servicio es una aplicación FastAPI independiente con su código en `app/`, sus pruebas en `tests/` y sus dependencias en `requirements.txt`. `requirements-dev.txt` agrupa las de los tres servicios y las herramientas de desarrollo, y `ruff.toml` la configuración común del linter.
+Cada servicio es una aplicación FastAPI independiente con su código en `app/`, sus pruebas en `tests/` y sus dependencias en `requirements.txt`. La infraestructura en AWS se define en `infra/` (ver [`docs/terraform.md`](docs/terraform.md)). `requirements-dev.txt` agrupa las de los tres servicios y las herramientas de desarrollo, y `ruff.toml` la configuración común del linter.
 
 ### Preparar el entorno
 
@@ -1039,7 +1040,10 @@ Documentación adicional del proyecto, en la carpeta [`docs/`](docs/):
 - [Entorno local con Docker Compose](docs/compose.md): puesta en marcha del sistema completo, redes, volúmenes y decisiones de diseño.
 - [Arquitectura interna de los servicios](docs/arquitectura.md): arquitectura en capas (api, services, repositories), su equivalencia con controller/service/repository y reglas.
 - [Capa de datos y migraciones](docs/database.md): estructura por capas de los servicios, migraciones con Alembic y tests con PostgreSQL.
-- [Integración continua](docs/ci.md): lint, tests, análisis de Dockerfiles y publicación de imágenes en GHCR.
+- [Integración continua](docs/ci.md): lint, tests, validación de Terraform, análisis de Dockerfiles y publicación de imágenes en GHCR.
+- [Infraestructura con Terraform](docs/terraform.md): qué es Terraform y cómo funciona, estructura de `infra/`, estado remoto en S3 con bloqueo, región de la UE y gestión de las credenciales.
+- [AWS: conceptos y comandos](docs/aws.md): S3, IAM, regiones y redes, y los comandos de la AWS CLI usados para preparar la cuenta.
+- [Decisiones del Hito 3](docs/hito3.md): elección del proveedor y de la persistencia, con sus alternativas (en curso).
 - [Decisiones del Hito 2](docs/hito2.md): justificación del gestor de tareas, la biblioteca de aserciones, el marco de pruebas y el sistema de CI, y qué lógica de negocio se prueba.
 - [Evidencias del Hito 2](docs/evidencias/README.md): salida de los comandos y capturas de la CI, GHCR y SonarCloud.
 
