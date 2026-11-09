@@ -1,0 +1,6 @@
+# Copy it to terraform.tfvars (ignored by Git) to change a value.
+# Nothing sensitive goes in a file: db_password is passed with the TF_VAR_db_password
+# environment variable.
+
+project_name = "verifactu-trace"
+aws_region   = "eu-north-1"
