@@ -33,8 +33,15 @@ variable "admin_cidr_blocks" {
   default     = []
 }
 
+variable "data_volume_size_gb" {
+  description = "Size, in GB, of the disk that keeps the data of PostgreSQL."
+  type        = number
+  default     = 10
+}
+
 # Sensitive and without a default value: it is never written in the code. It is passed with
-# the TF_VAR_db_password environment variable and used by the storage layer.
+# the TF_VAR_db_password environment variable and used by the compute layer, which gives it to
+# the PostgreSQL container.
 variable "db_password" {
   description = "Password of the database administrator."
   type        = string
