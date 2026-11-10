@@ -91,11 +91,46 @@ Los puertos abiertos son una variable (`app_ports`), para reducirlos a uno solo 
 
 `terraform apply` creó los 14 recursos sin que la política de la organización bloqueara ninguno, y `terraform destroy` los eliminó todos.
 
+## Capa de persistencia
+
+Definida en el módulo [`infra/modules/storage`](../infra/modules/storage/), que crea un volumen de EBS para los datos de PostgreSQL.
+
+| Decisión | Motivo |
+|---|---|
+| Tipo `gp3`, 10 GB por defecto (`data_volume_size_gb`) | Es el tipo de propósito general actual, y el tamaño sobra para un laboratorio |
+| Cifrado en reposo (`encrypted = true`) con la clave por defecto de EBS | Los datos de las facturas no deben guardarse sin cifrar |
+| El disco está en la zona de disponibilidad que devuelve el módulo de red | Un volumen solo se conecta a instancias de su zona |
+| El módulo no conecta el disco | La conexión necesita el identificador de la instancia, que pertenece a la capa de cómputo |
+| Sin copia final al destruir (`terraform destroy` borra el disco y sus datos) | El laboratorio se apaga al terminar cada sesión, y el enunciado exige que no quede nada generando costes |
+
+`terraform apply` creó los 15 recursos (los 14 de la red y el volumen) sin que la política de la organización bloqueara ninguno, y `terraform destroy` los eliminó todos, también el volumen.
+
+### `DATABASE_URL`
+
+No cambia respecto a local. [`compose.yaml`](../compose.yaml) la construye con las tres variables de PostgreSQL y el nombre del servicio, dentro de la red interna de Docker:
+
+```text
+postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+```
+
+El módulo de almacenamiento no necesita devolver ninguna dirección: PostgreSQL es un contenedor de la propia instancia, y su única salida es `volume_id`, para que el cómputo conecte el disco. La contraseña es la variable sensible `db_password`, que la capa de cómputo entregará al contenedor como `POSTGRES_PASSWORD`, sin escribirla en el repositorio.
+
+### Lo que queda para la capa de cómputo
+
+- Conectar el disco a la instancia, formatearlo la primera vez y montarlo en una carpeta.
+- Hacer que el contenedor de PostgreSQL guarde sus datos ahí. Un disco recién formateado trae una carpeta `lost+found` en la raíz, y PostgreSQL no inicializa un directorio de datos que no esté vacío. Los datos irán en una subcarpeta (con `PGDATA`).
+
+### Limitaciones
+
+- **No hay copias de seguridad.** Si el disco se borra (por ejemplo con `terraform destroy`), los datos se pierden.
+- **Redis no usa este disco.** El *stream* de eventos de Redis queda en el disco de la instancia. La fuente de la verdad es PostgreSQL, y el *stream* solo transporta los eventos hasta que se procesan.
+- **Una sola zona.** Si esa zona falla, no hay conmutación a otra.
+
 ## Pendiente
 
 Se completa en las issues de las capas y en la de documentación del hito:
 
-- Los módulos de persistencia y de cómputo (el de red ya está hecho).
+- El módulo de cómputo (los de red y de almacenamiento ya están hechos).
 - Justificación del backend remoto y del bloqueo del estado, más allá de lo descrito en [`terraform.md`](terraform.md).
 - Tabla con los entregables del enunciado y el lugar donde se cumple cada uno.
 - Cómo desplegar y destruir la infraestructura, paso a paso.
