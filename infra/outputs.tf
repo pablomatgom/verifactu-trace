@@ -32,3 +32,8 @@ output "availability_zone" {
   description = "Zone of the subnets."
   value       = module.network.availability_zone
 }
+
+output "data_volume_id" {
+  description = "Disk with the data of PostgreSQL."
+  value       = module.storage.volume_id
+}

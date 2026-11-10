@@ -17,7 +17,7 @@ AWS es un catálogo de servicios que se alquilan por uso. Cada uno hace una cosa
 | **EC2** | Servidor (máquina virtual) | Capa de cómputo |
 | **EBS** | Discos (volúmenes) que se conectan a una instancia | Capa de persistencia: los datos de PostgreSQL |
 
-S3, IAM, STS y la red (VPC) ya están en uso. EC2 y EBS se añaden con las capas de cómputo y de persistencia.
+S3, IAM, STS, la red (VPC) y el almacenamiento (EBS) ya están en uso. EC2 se añade con la capa de cómputo.
 
 ## Cuenta, región y organización
 
@@ -126,6 +126,24 @@ AWS crea además un **grupo de seguridad por defecto** en cada VPC, que permite 
 La subred privada está vacía a propósito: el enunciado pide subredes públicas y privadas, y queda disponible para lo que nunca deba ser accesible desde fuera (por ejemplo, una base de datos gestionada en el futuro). Ambas subredes están en la misma zona de disponibilidad, porque el disco con los datos de PostgreSQL solo se puede conectar a una instancia de **su misma zona**.
 
 Las VPC, las subredes y los grupos de seguridad no tienen coste en AWS. Lo que cuesta son el servidor y el disco.
+
+## Almacenamiento en bloque (EBS)
+
+**EBS** (*Elastic Block Store*) ofrece discos virtuales que se conectan a una instancia de EC2, como un disco duro a un ordenador. Se diferencia de S3 en cómo se usa:
+
+| | S3 | EBS |
+|---|---|---|
+| Qué guarda | Ficheros (objetos), a los que se accede por una API | Un disco, con su sistema de ficheros |
+| Cómo se usa | Se suben y se descargan | Se conecta a una instancia y se monta como una carpeta |
+| Uso en el proyecto | El estado de Terraform | Los datos de PostgreSQL |
+
+Lo que conviene saber de un volumen EBS:
+
+- **Vive fuera de la instancia.** Si la instancia se para, se reinicia o se sustituye, el disco y sus datos siguen ahí y se pueden conectar a otra.
+- **Está atado a una zona de disponibilidad.** Solo se puede conectar a instancias de la misma zona, por eso el módulo de red devuelve la zona y el de almacenamiento la recibe.
+- **El tipo `gp3`** es el de propósito general actual, con un rendimiento base que no depende del tamaño.
+- **Se cifra en reposo** con la clave que AWS gestiona por defecto para EBS (`encrypted = true`).
+- **Se paga por GB y por mes mientras existe**, esté conectado o no. Un disco de 10 GB cuesta muy poco, pero no es cero.
 
 ## Comandos de la AWS CLI
 

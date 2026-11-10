@@ -82,7 +82,11 @@ infra/
 ├── terraform.tfvars.example   # ejemplo de valores, sin nada sensible
 ├── .terraform.lock.hcl        # versiones exactas de los providers (se commitea)
 └── modules/
-    └── network/               # VPC, subredes, enrutamiento y grupos de seguridad
+    ├── network/               # VPC, subredes, enrutamiento y grupos de seguridad
+    │   ├── main.tf
+    │   ├── variables.tf
+    │   └── outputs.tf
+    └── storage/               # disco de EBS con los datos de PostgreSQL
         ├── main.tf
         ├── variables.tf
         └── outputs.tf
@@ -102,6 +106,15 @@ Cada capa es un módulo de `infra/modules/`: la raíz solo los conecta. Las capa
 | `admin_cidr_blocks` | `[]` | Desde qué direcciones se abre el puerto 22. Vacío: cerrado |
 
 Devuelve el identificador de la red, de las dos subredes y del grupo de seguridad del servidor, y la zona de disponibilidad. Las capas siguientes los reciben como entradas. El diseño y las decisiones están en [`aws.md`](aws.md#diseño) y en [`hito3.md`](hito3.md#capa-de-red).
+
+### Módulo de almacenamiento
+
+| Variable | Por defecto | Qué controla |
+|---|---|---|
+| `availability_zone` | Ninguno: es obligatoria. La raíz le pasa la zona que devuelve el módulo de red | Zona del disco. Debe ser la de la instancia |
+| `size_gb` | `10` | Tamaño del disco, en GB. En la raíz se cambia con `data_volume_size_gb` |
+
+Crea un único volumen de EBS `gp3`, cifrado, y devuelve su identificador (`volume_id`). No lo conecta a la instancia: eso lo hace la capa de cómputo, que es la que conoce la instancia. Los conceptos están en [`aws.md`](aws.md#almacenamiento-en-bloque-ebs) y las decisiones en [`hito3.md`](hito3.md#capa-de-persistencia).
 
 ## Proveedor y región
 

@@ -20,3 +20,12 @@ module "network" {
   app_allowed_cidr_blocks = var.app_allowed_cidr_blocks
   admin_cidr_blocks       = var.admin_cidr_blocks
 }
+
+# The disk with the data of PostgreSQL, in the zone of the network so the instance can use it.
+module "storage" {
+  source = "./modules/storage"
+
+  project_name      = var.project_name
+  availability_zone = module.network.availability_zone
+  size_gb           = var.data_volume_size_gb
+}
