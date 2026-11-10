@@ -15,9 +15,9 @@ AWS es un catálogo de servicios que se alquilan por uso. Cada uno hace una cosa
 | **STS** | Decir con qué identidad se está actuando | Comprobar que las credenciales funcionan |
 | **VPC** | Red privada virtual | Capa de red |
 | **EC2** | Servidor (máquina virtual) | Capa de cómputo |
-| **RDS** | Base de datos gestionada | Capa de persistencia |
+| **EBS** | Discos (volúmenes) que se conectan a una instancia | Capa de persistencia: los datos de PostgreSQL |
 
-Los tres últimos se añaden en las capas de red, cómputo y persistencia. Los dos primeros, y STS, ya están en uso.
+S3, IAM, STS y la red (VPC) ya están en uso. EC2 y EBS se añaden con las capas de cómputo y de persistencia.
 
 ## Cuenta, región y organización
 
@@ -89,7 +89,8 @@ La capa de red define dónde corre la aplicación y quién puede llegar a cada p
 | Concepto | Qué es | Analogía |
 |---|---|---|
 | **VPC** (*Virtual Private Cloud*) | Red privada aislada de las de otros clientes, con un rango de direcciones IP | El edificio de oficinas alquilado |
-| **Subred** | Porción de la VPC con su propio rango | Una planta del edificio |
+| **Subred** | Porción de la VPC con su propio rango, dentro de una zona de disponibilidad | Una planta del edificio |
+| **Zona de disponibilidad** (AZ) | Un centro de datos concreto dentro de una región (`eu-north-1a`, `eu-north-1b`...) | Un edificio distinto del mismo campus |
 | **Subred pública** | Subred con salida directa a Internet | La planta con puerta a la calle |
 | **Subred privada** | Subred sin acceso desde Internet | La planta interior |
 | **Internet Gateway** | Puerta de la VPC hacia Internet | La puerta principal |
@@ -105,7 +106,9 @@ Un rango de direcciones se escribe como una IP seguida de `/n`. Cuanto mayor es 
 | `10.0.0.0/16` | unas 65.000 | La VPC entera |
 | `10.0.1.0/24` | 256 | Una subred |
 
-### Diseño previsto
+### Diseño
+
+Lo define el módulo [`infra/modules/network`](../infra/modules/network/):
 
 ```text
 VPC 10.0.0.0/16
@@ -113,13 +116,16 @@ VPC 10.0.0.0/16
 ├── Subred pública 10.0.1.0/24   ← el servidor (EC2), con salida a Internet
 │       grupo de seguridad: solo los puertos de la aplicación
 │
-└── Subred privada 10.0.2.0/24   ← la base de datos (RDS), sin acceso desde Internet
-        grupo de seguridad: solo acepta tráfico del grupo del servidor
+└── Subred privada 10.0.2.0/24   ← sin ruta a Internet; de momento no aloja nada
 ```
 
-La base de datos no está expuesta a Internet: solo el servidor puede llegar a ella. Es el principio de **mínimo privilegio**: cada pieza ve solo lo que necesita. Las reglas de los grupos de seguridad se refieren a otro grupo y no a una dirección IP, de modo que siguen valiendo aunque la IP del servidor cambie.
+PostgreSQL y Redis son contenedores de la propia instancia y hablan con los servicios dentro de ella, así que sus puertos (5432 y 6379) **no se abren al exterior**. Es el principio de **mínimo privilegio**: cada pieza ve solo lo que necesita. El puerto 22 (SSH) tampoco está abierto, salvo que se indique una dirección en `admin_cidr_blocks`.
 
-Las VPC, las subredes y los grupos de seguridad no tienen coste en AWS. Lo que cuesta son el servidor y la base de datos.
+AWS crea además un **grupo de seguridad por defecto** en cada VPC, que permite el tráfico entre sus miembros y en el que acaba cualquier recurso creado sin indicar grupo. El módulo lo declara **sin reglas**, de modo que Terraform se las quita todas y un recurso que llegue ahí por descuido no hereda ningún permiso.
+
+La subred privada está vacía a propósito: el enunciado pide subredes públicas y privadas, y queda disponible para lo que nunca deba ser accesible desde fuera (por ejemplo, una base de datos gestionada en el futuro). Ambas subredes están en la misma zona de disponibilidad, porque el disco con los datos de PostgreSQL solo se puede conectar a una instancia de **su misma zona**.
+
+Las VPC, las subredes y los grupos de seguridad no tienen coste en AWS. Lo que cuesta son el servidor y el disco.
 
 ## Comandos de la AWS CLI
 

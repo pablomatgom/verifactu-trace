@@ -77,13 +77,31 @@ Es el principio sobre el que se apoya el experimento del Hito 3: un bucle que co
 infra/
 ├── providers.tf               # versiones de Terraform y del provider, y backend remoto
 ├── variables.tf               # variables de entrada
-├── main.tf                    # etiquetas comunes y lectura de la cuenta
+├── main.tf                    # etiquetas comunes, lectura de la cuenta y llamada a los módulos
 ├── outputs.tf                 # valores de salida
 ├── terraform.tfvars.example   # ejemplo de valores, sin nada sensible
-└── .terraform.lock.hcl        # versiones exactas de los providers (se commitea)
+├── .terraform.lock.hcl        # versiones exactas de los providers (se commitea)
+└── modules/
+    └── network/               # VPC, subredes, enrutamiento y grupos de seguridad
+        ├── main.tf
+        ├── variables.tf
+        └── outputs.tf
 ```
 
-Las capas de red, persistencia y cómputo se añaden como módulos en `infra/modules/`.
+Cada capa es un módulo de `infra/modules/`: la raíz solo los conecta. Las capas de persistencia y cómputo se añaden igual.
+
+### Módulo de red
+
+| Variable | Por defecto | Qué controla |
+|---|---|---|
+| `vpc_cidr` | `10.0.0.0/16` | Rango de la red |
+| `public_subnet_cidr` | `10.0.1.0/24` | Subred pública |
+| `private_subnet_cidr` | `10.0.2.0/24` | Subred privada |
+| `app_ports` | `[8001, 8002, 8003]` | Puertos de la aplicación que se abren |
+| `app_allowed_cidr_blocks` | `["0.0.0.0/0"]` | Desde qué direcciones se llega a esos puertos |
+| `admin_cidr_blocks` | `[]` | Desde qué direcciones se abre el puerto 22. Vacío: cerrado |
+
+Devuelve el identificador de la red, de las dos subredes y del grupo de seguridad del servidor, y la zona de disponibilidad. Las capas siguientes los reciben como entradas. El diseño y las decisiones están en [`aws.md`](aws.md#diseño) y en [`hito3.md`](hito3.md#capa-de-red).
 
 ## Proveedor y región
 
@@ -145,8 +163,9 @@ terraform apply
 - `terraform init` configura el backend remoto y descarga el provider.
 - `terraform plan` compara el código con el estado y con la infraestructura real, y enseña lo que cambiaría.
 - `terraform apply` lo aplica, tras pedir confirmación.
+- `terraform destroy` borra todo lo que Terraform gestiona. Conviene ejecutarlo al terminar cada sesión de trabajo y comprobar en la consola de AWS que no queda nada.
 
-Las variables de entorno solo duran mientras la ventana está abierta, así que la contraseña no queda guardada.
+`db_password` no tiene valor por defecto, así que Terraform exige darle uno aunque todavía ningún recurso la use (sirve cualquier valor). Las variables de entorno solo duran mientras la ventana está abierta, así que la contraseña no queda guardada.
 
 En el **Símbolo del sistema (cmd)** la sintaxis es `set AWS_PROFILE=verifactu`, sin comillas ni espacios alrededor del `=`.
 

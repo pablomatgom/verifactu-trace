@@ -32,41 +32,70 @@ La cuenta no es una cuenta de AWS independiente, sino un **proyecto gestionado**
 - La organización aplica una política de control de servicios (SCP) que **limita lo que se puede hacer**, aunque el usuario IAM tenga `AdministratorAccess`.
 - Crear un bucket en `eu-west-1` fue rechazado por esa política. En `eu-north-1`, la región del proyecto, funcionó.
 - Por eso el proyecto usa `eu-north-1`. Es una región de la Unión Europea, así que cumple con el RGPD.
-- No se pidió tarjeta de pago al crear la cuenta, de modo que no puede generar cargos.
+- No se pidió tarjeta de pago al crear la cuenta.
 
 Cualquier otro recurso puede estar limitado por la misma política. Por eso cada capa se prueba al crearla y se anota aquí lo que la política impida.
 
 ## Persistencia
 
-**Decisión provisional: base de datos gestionada (Amazon RDS para PostgreSQL)**, con la posibilidad de volver a PostgreSQL en un contenedor con un volumen en la instancia si la política de la cuenta o el coste lo impiden. La decisión se confirma al crear la capa de persistencia.
+**Decisión: PostgreSQL en un contenedor de la instancia, con los datos en un volumen de bloque (EBS)** aparte de la instancia. La alternativa era una base de datos gestionada (Amazon RDS).
+
+El enunciado admite las dos: pide "almacenamiento en bloque o base de datos gestionada". No es, por tanto, un requisito, sino una decisión práctica.
 
 ### Efecto sobre la configuración
 
 Hoy PostgreSQL y Redis son contenedores de [`compose.yaml`](../compose.yaml), y los servicios leen la dirección de la base de datos de `DATABASE_URL`.
 
-| | Base de datos gestionada (RDS) | Volumen en la instancia |
+| | Contenedor con volumen (elegida) | Base de datos gestionada (RDS) |
 |---|---|---|
-| `DATABASE_URL` | Apunta a la dirección de RDS (una salida de Terraform) | Sigue apuntando al contenedor `postgres` |
-| `compose.yaml` en la nube | Sin el servicio `postgres` | Igual que en local |
+| `DATABASE_URL` | No cambia: sigue apuntando al contenedor `postgres` | Apuntaría a la dirección de RDS |
+| `compose.yaml` en la nube | Igual que en local | Sin el servicio `postgres` |
 | Redis | Contenedor en la instancia | Contenedor en la instancia |
-| Copias de seguridad y parches | Los hace AWS | Los hace el proyecto |
-| Coste | Más alto, con cargo a los créditos | Más bajo |
-| Seguridad de red | En una subred privada, accesible solo desde el grupo de seguridad del servidor | En la instancia, sin exposición adicional |
+| Copias de seguridad y parches | Los hace el proyecto | Los hace AWS |
+| Coste | Solo el disco | Una instancia aparte, bastante más |
+| Riesgo con la cuenta | Bajo: la red ya se creó sin bloqueo, y las instancias y los volúmenes son lo habitual, aunque aún no se han probado | No se sabe si la política de la organización lo permite |
+| Subredes | Una subred privada basta | RDS exige subredes en dos zonas de disponibilidad |
 
-Los servicios aplican sus migraciones al arrancar, así que funcionan igual contra RDS. Habrá que comprobar que el usuario de la base de datos puede crear los tres esquemas (`documents`, `traceability` y `submissions`).
+### Por qué el contenedor con volumen
 
-### Por qué RDS
+- **Coste:** el crédito de la cuenta no se ha podido comprobar, y RDS es la parte más cara.
+- **Riesgo:** la cuenta pertenece a una organización que aplica una política que ya bloqueó una acción. Un servicio más complejo como RDS aumenta la probabilidad de otro bloqueo.
+- **Sin cambios en la aplicación:** `DATABASE_URL`, `compose.yaml`, las migraciones y las pruebas de integración siguen valiendo tal cual.
+- **Cumple el enunciado:** el volumen aparte de la instancia es "almacenamiento en bloque".
 
-- Es lo que pide el enunciado como ejemplo de capa de persistencia ("base de datos gestionada") y refleja mejor un despliegue real.
-- La base de datos queda en una subred privada, sin acceso desde Internet.
+### Qué se pierde
 
-El principal riesgo es el coste y que la política de la cuenta limite el servicio. Una instancia pequeña de RDS cuesta más que una instancia de cómputo equivalente, y su coste real debe comprobarse en la calculadora de AWS antes de dejarla encendida. La infraestructura se destruye al terminar cada sesión de trabajo.
+- Las copias de seguridad y los parches de PostgreSQL pasan a ser responsabilidad del proyecto.
+- No hay conmutación automática a otra zona si la que aloja la instancia falla.
+- Es menos habitual en un despliegue real, donde se usaría un servicio gestionado.
+
+El volumen se crea en la **misma zona de disponibilidad** que la instancia, porque solo se puede conectar a instancias de su zona. Por eso el módulo de red devuelve la zona como salida y pone las dos subredes en ella.
+
+## Capa de red
+
+Definida en el módulo [`infra/modules/network`](../infra/modules/network/) (14 recursos). Sus decisiones:
+
+| Decisión | Motivo |
+|---|---|
+| Una VPC `10.0.0.0/16`, con una subred pública (`10.0.1.0/24`) y una privada (`10.0.2.0/24`) | El enunciado pide subredes públicas y privadas |
+| Las dos subredes están en la misma zona de disponibilidad (`eu-north-1a`) | El volumen de EBS con los datos solo se conecta a instancias de su zona |
+| Lo que distingue una subred pública de una privada es su **tabla de rutas**: la pública tiene la ruta `0.0.0.0/0` hacia el *internet gateway* y la privada no | Así funciona AWS: la subred en sí no es ni pública ni privada |
+| Sin *NAT Gateway* | Tiene un coste fijo por hora y la subred privada no necesita salir a Internet |
+| La subred pública no asigna IP pública por sí sola | La pedirá la instancia que se cree en ella |
+| El grupo de seguridad del servidor abre solo los puertos de la aplicación (8001, 8002 y 8003) y deja salir todo el tráfico | La instancia necesita descargar las imágenes de GHCR |
+| El puerto 22 (SSH) está cerrado, salvo que se indique una dirección en `admin_cidr_blocks` | Mínimo privilegio: el acceso de administración se decide al crear el servidor |
+| Los puertos 5432 (PostgreSQL) y 6379 (Redis) no se abren | Son contenedores de la instancia y hablan con los servicios dentro de ella |
+| El grupo de seguridad por defecto de la VPC se declara sin reglas | Un recurso creado sin indicar grupo no hereda ningún permiso |
+
+Los puertos abiertos son una variable (`app_ports`), para reducirlos a uno solo cuando exista el *gateway* de la API. Mientras tanto, esos tres puertos están abiertos a todo Internet (`app_allowed_cidr_blocks`); es una limitación temporal.
+
+`terraform apply` creó los 14 recursos sin que la política de la organización bloqueara ninguno, y `terraform destroy` los eliminó todos.
 
 ## Pendiente
 
 Se completa en las issues de las capas y en la de documentación del hito:
 
-- Estructura de módulos (red, persistencia y cómputo).
+- Los módulos de persistencia y de cómputo (el de red ya está hecho).
 - Justificación del backend remoto y del bloqueo del estado, más allá de lo descrito en [`terraform.md`](terraform.md).
 - Tabla con los entregables del enunciado y el lugar donde se cumple cada uno.
 - Cómo desplegar y destruir la infraestructura, paso a paso.
