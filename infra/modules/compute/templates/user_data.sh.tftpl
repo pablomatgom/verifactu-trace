@@ -8,7 +8,8 @@ echo "== Docker"
 dnf install -y docker
 systemctl enable --now docker
 install -d /usr/local/lib/docker/cli-plugins
-curl -fsSL -o /usr/local/lib/docker/cli-plugins/docker-compose \
+# The download is redirected to another host: both the request and the redirect are HTTPS only.
+curl -fsSL --proto "=https" --proto-redir "=https" -o /usr/local/lib/docker/cli-plugins/docker-compose \
   "https://github.com/docker/compose/releases/download/${compose_version}/docker-compose-linux-x86_64"
 echo "${compose_sha256}  /usr/local/lib/docker/cli-plugins/docker-compose" | sha256sum --check
 chmod 755 /usr/local/lib/docker/cli-plugins/docker-compose
@@ -18,10 +19,10 @@ echo "== Data disk"
 # instances it shows up as an NVMe device, with the identifier of the volume in its name.
 DEVICE=/dev/disk/by-id/nvme-Amazon_Elastic_Block_Store_${volume_device_id}
 for attempt in $(seq 1 60); do
-  [ -e "$DEVICE" ] && break
+  [[ -e "$DEVICE" ]] && break
   sleep 5
 done
-[ -e "$DEVICE" ] || { echo "The data disk did not appear"; exit 1; }
+[[ -e "$DEVICE" ]] || { echo "The data disk did not appear"; exit 1; }
 # It is formatted only the first time: a disk that already has a filesystem keeps its data.
 blkid "$DEVICE" > /dev/null || mkfs -t ext4 "$DEVICE"
 install -d /mnt/postgres
@@ -42,7 +43,7 @@ for attempt in $(seq 1 12); do
     --query Parameter.Value --output text --region "${aws_region}") && break
   sleep 10
 done
-[ -n "$PASSWORD" ] || { echo "The password could not be read"; exit 1; }
+[[ -n "$PASSWORD" ]] || { echo "The password could not be read"; exit 1; }
 umask 077
 cat > /opt/verifactu/.env <<ENV
 POSTGRES_USER=${db_user}
