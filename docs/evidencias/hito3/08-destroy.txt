@@ -1,0 +1,792 @@
+﻿# 2026-11-17T21:57:53 | terraform destroy
+module.network.data.aws_availability_zones.available: Reading...
+module.compute.data.aws_ssm_parameter.al2023: Reading...
+module.compute.data.aws_iam_policy_document.assume_role: Reading...
+data.aws_caller_identity.current: Reading...
+module.network.aws_vpc.main: Refreshing state... [id=vpc-0048ca410df2744c2]
+module.compute.aws_ssm_parameter.db_password: Refreshing state... [id=/verifactu-trace/db-password]
+module.compute.data.aws_iam_policy_document.assume_role: Read complete after 0s [id=2851119427]
+module.compute.aws_iam_role.app: Refreshing state... [id=verifactu-trace-app]
+data.aws_caller_identity.current: Read complete after 0s [id=529470780070]
+module.compute.data.aws_ssm_parameter.al2023: Read complete after 0s [id=/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64]
+module.network.data.aws_availability_zones.available: Read complete after 0s [id=eu-north-1]
+module.storage.aws_ebs_volume.postgres_data: Refreshing state... [id=vol-0fcff82b08ea2815c]
+module.compute.data.aws_iam_policy_document.read_password: Reading...
+module.compute.data.aws_iam_policy_document.read_password: Read complete after 0s [id=3441058863]
+module.compute.aws_iam_role_policy.read_password: Refreshing state... [id=verifactu-trace-app:read-db-password]
+module.compute.aws_iam_role_policy_attachment.ssm_core: Refreshing state... [id=verifactu-trace-app/arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore]
+module.compute.aws_iam_instance_profile.app: Refreshing state... [id=verifactu-trace-app]
+module.network.aws_internet_gateway.main: Refreshing state... [id=igw-08434054e97af5656]
+module.network.aws_route_table.private: Refreshing state... [id=rtb-03a21364990bbb441]
+module.network.aws_default_security_group.default: Refreshing state... [id=sg-0db38708573c12e41]
+module.network.aws_subnet.private: Refreshing state... [id=subnet-0fe9ddaa4caee7554]
+module.network.aws_subnet.public: Refreshing state... [id=subnet-0c153825925ddbd33]
+module.network.aws_security_group.compute: Refreshing state... [id=sg-0eccc796296662efe]
+module.network.aws_route_table.public: Refreshing state... [id=rtb-04c5c9b670512b74f]
+module.network.aws_route_table_association.private: Refreshing state... [id=rtbassoc-0cdb24c7d22df8a13]
+module.network.aws_vpc_security_group_egress_rule.compute_all: Refreshing state... [id=sgr-0c7adc87a56c34c7e]
+module.network.aws_vpc_security_group_ingress_rule.app["8001-0.0.0.0/0"]: Refreshing state... [id=sgr-08b5c8c68fcb53899]
+module.network.aws_vpc_security_group_ingress_rule.app["8003-0.0.0.0/0"]: Refreshing state... [id=sgr-0a5150cc95d2b5d48]
+module.network.aws_vpc_security_group_ingress_rule.app["8002-0.0.0.0/0"]: Refreshing state... [id=sgr-0db46b4a35fd82079]
+module.network.aws_route_table_association.public: Refreshing state... [id=rtbassoc-0c931344bd48d93a3]
+module.compute.aws_instance.app: Refreshing state... [id=i-0363ebf83e73259f7]
+module.compute.aws_volume_attachment.postgres_data: Refreshing state... [id=vai-4028365416]
+
+Terraform used the selected providers to generate the following execution
+plan. Resource actions are indicated with the following symbols:
+  - destroy
+
+Terraform will perform the following actions:
+
+  # module.compute.aws_iam_instance_profile.app will be destroyed
+  - resource "aws_iam_instance_profile" "app" {
+      - arn         = "arn:aws:iam::529470780070:instance-profile/verifactu-trace-app" -> null
+      - create_date = "2026-11-17T20:43:26Z" -> null
+      - id          = "verifactu-trace-app" -> null
+      - name        = "verifactu-trace-app" -> null
+      - path        = "/" -> null
+      - role        = "verifactu-trace-app" -> null
+      - tags        = {} -> null
+      - tags_all    = {
+          - "ManagedBy" = "terraform"
+          - "Project"   = "verifactu-trace"
+        } -> null
+      - unique_id   = "AIPAXWRXK6KTJZXPYK74Z" -> null
+        # (1 unchanged attribute hidden)
+    }
+
+  # module.compute.aws_iam_role.app will be destroyed
+  - resource "aws_iam_role" "app" {
+      - arn                   = "arn:aws:iam::529470780070:role/verifactu-trace-app" -> null
+      - assume_role_policy    = jsonencode(
+            {
+              - Statement = [
+                  - {
+                      - Action    = "sts:AssumeRole"
+                      - Effect    = "Allow"
+                      - Principal = {
+                          - Service = "ec2.amazonaws.com"
+                        }
+                    },
+                ]
+              - Version   = "2012-10-17"
+            }
+        ) -> null
+      - create_date           = "2026-11-17T20:43:25Z" -> null
+      - force_detach_policies = false -> null
+      - id                    = "verifactu-trace-app" -> null
+      - managed_policy_arns   = [
+          - "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore",
+        ] -> null
+      - max_session_duration  = 3600 -> null
+      - name                  = "verifactu-trace-app" -> null
+      - path                  = "/" -> null
+      - tags                  = {} -> null
+      - tags_all              = {
+          - "ManagedBy" = "terraform"
+          - "Project"   = "verifactu-trace"
+        } -> null
+      - unique_id             = "AROAXWRXK6KTGCFFQDGEC" -> null
+        # (3 unchanged attributes hidden)
+
+      - inline_policy {
+          - name   = "read-db-password" -> null
+          - policy = jsonencode(
+                {
+                  - Statement = [
+                      - {
+                          - Action   = "ssm:GetParameter"
+                          - Effect   = "Allow"
+                          - Resource = "arn:aws:ssm:eu-north-1:529470780070:parameter/verifactu-trace/db-password"
+                        },
+                    ]
+                  - Version   = "2012-10-17"
+                }
+            ) -> null
+        }
+    }
+
+  # module.compute.aws_iam_role_policy.read_password will be destroyed
+  - resource "aws_iam_role_policy" "read_password" {
+      - id          = "verifactu-trace-app:read-db-password" -> null
+      - name        = "read-db-password" -> null
+      - policy      = jsonencode(
+            {
+              - Statement = [
+                  - {
+                      - Action   = "ssm:GetParameter"
+                      - Effect   = "Allow"
+                      - Resource = "arn:aws:ssm:eu-north-1:529470780070:parameter/verifactu-trace/db-password"
+                    },
+                ]
+              - Version   = "2012-10-17"
+            }
+        ) -> null
+      - role        = "verifactu-trace-app" -> null
+        # (1 unchanged attribute hidden)
+    }
+
+  # module.compute.aws_iam_role_policy_attachment.ssm_core will be destroyed
+  - resource "aws_iam_role_policy_attachment" "ssm_core" {
+      - id         = "verifactu-trace-app/arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore" -> null
+      - policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore" -> null
+      - role       = "verifactu-trace-app" -> null
+    }
+
+  # module.compute.aws_instance.app will be destroyed
+  - resource "aws_instance" "app" {
+      - ami                                  = "ami-0f71b90bee7050a75" -> null
+      - arn                                  = "arn:aws:ec2:eu-north-1:529470780070:instance/i-0363ebf83e73259f7" -> null
+      - associate_public_ip_address          = true -> null
+      - availability_zone                    = "eu-north-1a" -> null
+      - disable_api_stop                     = false -> null
+      - disable_api_termination              = false -> null
+      - ebs_optimized                        = false -> null
+      - force_destroy                        = false -> null
+      - get_password_data                    = false -> null
+      - hibernation                          = false -> null
+      - iam_instance_profile                 = "verifactu-trace-app" -> null
+      - id                                   = "i-0363ebf83e73259f7" -> null
+      - instance_initiated_shutdown_behavior = "stop" -> null
+      - instance_state                       = "running" -> null
+      - instance_type                        = "t3.small" -> null
+      - ipv6_address_count                   = 0 -> null
+      - ipv6_addresses                       = [] -> null
+      - monitoring                           = false -> null
+      - placement_partition_number           = 0 -> null
+      - primary_network_interface_id         = "eni-0bf1ee4503f17339a" -> null
+      - private_dns                          = "ip-10-0-1-37.eu-north-1.compute.internal" -> null
+      - private_ip                           = "10.0.1.37" -> null
+      - public_dns                           = "ec2-13-49-224-245.eu-north-1.compute.amazonaws.com" -> null
+      - public_ip                            = "13.49.224.245" -> null
+      - region                               = "eu-north-1" -> null
+      - secondary_private_ips                = [] -> null
+      - security_groups                      = [] -> null
+      - source_dest_check                    = true -> null
+      - subnet_id                            = "subnet-0c153825925ddbd33" -> null
+      - tags                                 = {
+          - "Name" = "verifactu-trace-app"
+        } -> null
+      - tags_all                             = {
+          - "ManagedBy" = "terraform"
+          - "Name"      = "verifactu-trace-app"
+          - "Project"   = "verifactu-trace"
+        } -> null
+      - tenancy                              = "default" -> null
+      - user_data                            = <<-EOT
+            #!/bin/bash
+            # Prepares the instance on its first boot: it installs Docker, mounts the data disk, reads the
+            # database password and starts the system. Everything it prints is in /var/log/verifactu-setup.log.
+            set -euo pipefail
+            exec > >(tee -a /var/log/verifactu-setup.log) 2>&1
+            
+            echo "== Docker"
+            dnf install -y docker
+            systemctl enable --now docker
+            install -d /usr/local/lib/docker/cli-plugins
+            # The download is redirected to another host: both the request and the redirect are HTTPS only.
+            curl -fsSL --proto "=https" --proto-redir "=https" -o /usr/local/lib/docker/cli-plugins/docker-compose \
+              "https://github.com/docker/compose/releases/download/v5.7.0/docker-compose-linux-x86_64"
+            echo "7758048ad38e580f22559603312874fec8bb638d021a9e64182385fc17cc12a2  /usr/local/lib/docker/cli-plugins/docker-compose" | sha256sum --check
+            chmod 755 /usr/local/lib/docker/cli-plugins/docker-compose
+            
+            echo "== Data disk"
+            # The disk is attached after the instance starts, so it may take a while to appear. On these
+            # instances it shows up as an NVMe device, with the identifier of the volume in its name.
+            DEVICE=/dev/disk/by-id/nvme-Amazon_Elastic_Block_Store_vol0fcff82b08ea2815c
+            for attempt in $(seq 1 60); do
+              [[ -e "$DEVICE" ]] && break
+              sleep 5
+            done
+            [[ -e "$DEVICE" ]] || { echo "The data disk did not appear"; exit 1; }
+            # It is formatted only the first time: a disk that already has a filesystem keeps its data.
+            blkid "$DEVICE" > /dev/null || mkfs -t ext4 "$DEVICE"
+            install -d /mnt/postgres
+            UUID=$(blkid -s UUID -o value "$DEVICE")
+            grep -q "$UUID" /etc/fstab || echo "UUID=$UUID /mnt/postgres ext4 defaults,nofail 0 2" >> /etc/fstab
+            mount -a
+            
+            echo "== Files of the application"
+            install -d /opt/verifactu/db/init
+            echo "IyBDb21wb3NlIGZpbGUgb2YgdGhlIGNsb3VkIGluc3RhbmNlLiBJdCBtaXJyb3JzIHRoZSBjb21wb3NlLnlhbWwgb2YgdGhlIHJlcG9zaXRvcnksIHdpdGggdGhyZWUKIyBkaWZmZXJlbmNlczoKIyAgIC0gdGhlIGltYWdlcyBhcmUgcHVsbGVkIGZyb20gdGhlIHJlZ2lzdHJ5LCBpbnN0ZWFkIG9mIGJlaW5nIGJ1aWx0OwojICAgLSB0aGUgcG9ydHMgYXJlIHB1Ymxpc2hlZCBvbiBldmVyeSBpbnRlcmZhY2U6IHRoZSBzZWN1cml0eSBncm91cCBkZWNpZGVzIHdobyByZWFjaGVzIHRoZW07CiMgICAtIHRoZSBkYXRhIG9mIFBvc3RncmVTUUwgbGl2ZSBvbiB0aGUgYXR0YWNoZWQgZGlzaywgbW91bnRlZCBpbiAvbW50L3Bvc3RncmVzLgojIFRoZSB2YWx1ZXMgY29tZSBmcm9tIHRoZSAuZW52IGZpbGUgdGhhdCB0aGUgaW5zdGFuY2Ugd3JpdGVzIHdoZW4gaXQgYm9vdHMuCgpzZXJ2aWNlczoKICBwb3N0Z3JlczoKICAgIGltYWdlOiBwb3N0Z3JlczoxNy1hbHBpbmUKICAgIHJlc3RhcnQ6IHVubGVzcy1zdG9wcGVkCiAgICBlbnZpcm9ubWVudDoKICAgICAgUE9TVEdSRVNfVVNFUjogJHtQT1NUR1JFU19VU0VSOj9QT1NUR1JFU19VU0VSIGlzIG5vdCBzZXR9CiAgICAgIFBPU1RHUkVTX1BBU1NXT1JEOiAke1BPU1RHUkVTX1BBU1NXT1JEOj9QT1NUR1JFU19QQVNTV09SRCBpcyBub3Qgc2V0fQogICAgICBQT1NUR1JFU19EQjogJHtQT1NUR1JFU19EQjo/UE9TVEdSRVNfREIgaXMgbm90IHNldH0KICAgICAgIyBUaGUgZGF0YSBnbyBpbiBhIHN1YmZvbGRlcjogdGhlIHJvb3Qgb2YgYSBmcmVzaGx5IGZvcm1hdHRlZCBkaXNrIGhhcyBhIGxvc3QrZm91bmQKICAgICAgIyBmb2xkZXIsIGFuZCBQb3N0Z3JlU1FMIGRvZXMgbm90IGluaXRpYWxpc2UgYSBkYXRhIGRpcmVjdG9yeSB0aGF0IGlzIG5vdCBlbXB0eS4KICAgICAgUEdEQVRBOiAvdmFyL2xpYi9wb3N0Z3Jlc3FsL2RhdGEvcGdkYXRhCiAgICB2b2x1bWVzOgogICAgICAtIC9tbnQvcG9zdGdyZXM6L3Zhci9saWIvcG9zdGdyZXNxbC9kYXRhCiAgICAgICMgU2NyaXB0cyBydW4gb25seSB0aGUgZmlyc3QgdGltZSwgd2hlbiB0aGUgZGF0YSBkaXJlY3RvcnkgaXMgZW1wdHkuCiAgICAgIC0gLi9kYi9pbml0Oi9kb2NrZXItZW50cnlwb2ludC1pbml0ZGIuZDpybwogICAgbmV0d29ya3M6CiAgICAgIC0gZGF0YQogICAgaGVhbHRoY2hlY2s6CiAgICAgIHRlc3Q6IFsiQ01ELVNIRUxMIiwgInBnX2lzcmVhZHkgLVUgJCR7UE9TVEdSRVNfVVNFUn0gLWQgJCR7UE9TVEdSRVNfREJ9Il0KICAgICAgaW50ZXJ2YWw6IDEwcwogICAgICB0aW1lb3V0OiA1cwogICAgICByZXRyaWVzOiA1CiAgICAgIHN0YXJ0X3BlcmlvZDogMTBzCgogIHJlZGlzOgogICAgaW1hZ2U6IHJlZGlzOjctYWxwaW5lCiAgICByZXN0YXJ0OiB1bmxlc3Mtc3RvcHBlZAogICAgIyBBcHBlbmQtb25seSBwZXJzaXN0ZW5jZSwgc28gdGhlIGV2ZW50IHN0cmVhbXMgc3Vydml2ZSBhIHJlc3RhcnQgb2YgdGhlIGNvbnRhaW5lci4KICAgIGNvbW1hbmQ6IFsicmVkaXMtc2VydmVyIiwgIi0tYXBwZW5kb25seSIsICJ5ZXMiXQogICAgdm9sdW1lczoKICAgICAgLSByZWRpcy1kYXRhOi9kYXRhCiAgICBuZXR3b3JrczoKICAgICAgLSBkYXRhCiAgICBoZWFsdGhjaGVjazoKICAgICAgdGVzdDogWyJDTUQiLCAicmVkaXMtY2xpIiwgInBpbmciXQogICAgICBpbnRlcnZhbDogMTBzCiAgICAgIHRpbWVvdXQ6IDVzCiAgICAgIHJldHJpZXM6IDUKCiAgZG9jdW1lbnQtc2VydmljZToKICAgIGltYWdlOiAke0lNQUdFX1JFR0lTVFJZOj9JTUFHRV9SRUdJU1RSWSBpcyBub3Qgc2V0fS9kb2N1bWVudC1zZXJ2aWNlOiR7SU1BR0VfVEFHOj9JTUFHRV9UQUcgaXMgbm90IHNldH0KICAgIHJlc3RhcnQ6IHVubGVzcy1zdG9wcGVkCiAgICBlbnZpcm9ubWVudDoKICAgICAgREFUQUJBU0VfVVJMOiBwb3N0Z3Jlc3FsOi8vJHtQT1NUR1JFU19VU0VSfToke1BPU1RHUkVTX1BBU1NXT1JEfUBwb3N0Z3Jlczo1NDMyLyR7UE9TVEdSRVNfREJ9CiAgICAgIERBVEFCQVNFX1NDSEVNQTogZG9jdW1lbnRzCiAgICAgIFJFRElTX1VSTDogcmVkaXM6Ly9yZWRpczo2Mzc5LzAKICAgIHBvcnRzOgogICAgICAtICI4MDAxOjgwMDEiCiAgICBuZXR3b3JrczoKICAgICAgLSBlZGdlCiAgICAgIC0gZGF0YQogICAgZGVwZW5kc19vbjoKICAgICAgcG9zdGdyZXM6CiAgICAgICAgY29uZGl0aW9uOiBzZXJ2aWNlX2hlYWx0aHkKICAgICAgcmVkaXM6CiAgICAgICAgY29uZGl0aW9uOiBzZXJ2aWNlX2hlYWx0aHkKCiAgdHJhY2VhYmlsaXR5LXNlcnZpY2U6CiAgICBpbWFnZTogJHtJTUFHRV9SRUdJU1RSWX0vdHJhY2VhYmlsaXR5LXNlcnZpY2U6JHtJTUFHRV9UQUd9CiAgICByZXN0YXJ0OiB1bmxlc3Mtc3RvcHBlZAogICAgZW52aXJvbm1lbnQ6CiAgICAgIERBVEFCQVNFX1VSTDogcG9zdGdyZXNxbDovLyR7UE9TVEdSRVNfVVNFUn06JHtQT1NUR1JFU19QQVNTV09SRH1AcG9zdGdyZXM6NTQzMi8ke1BPU1RHUkVTX0RCfQogICAgICBEQVRBQkFTRV9TQ0hFTUE6IHRyYWNlYWJpbGl0eQogICAgICBSRURJU19VUkw6IHJlZGlzOi8vcmVkaXM6NjM3OS8wCiAgICAgIERPQ1VNRU5UX1NFUlZJQ0VfVVJMOiBodHRwOi8vZG9jdW1lbnQtc2VydmljZTo4MDAxCiAgICBwb3J0czoKICAgICAgLSAiODAwMjo4MDAyIgogICAgbmV0d29ya3M6CiAgICAgIC0gZWRnZQogICAgICAtIGRhdGEKICAgIGRlcGVuZHNfb246CiAgICAgIHBvc3RncmVzOgogICAgICAgIGNvbmRpdGlvbjogc2VydmljZV9oZWFsdGh5CiAgICAgIHJlZGlzOgogICAgICAgIGNvbmRpdGlvbjogc2VydmljZV9oZWFsdGh5CgogIHN1Ym1pc3Npb24tc2VydmljZToKICAgIGltYWdlOiAke0lNQUdFX1JFR0lTVFJZfS9zdWJtaXNzaW9uLXNlcnZpY2U6JHtJTUFHRV9UQUd9CiAgICByZXN0YXJ0OiB1bmxlc3Mtc3RvcHBlZAogICAgZW52aXJvbm1lbnQ6CiAgICAgIERBVEFCQVNFX1VSTDogcG9zdGdyZXNxbDovLyR7UE9TVEdSRVNfVVNFUn06JHtQT1NUR1JFU19QQVNTV09SRH1AcG9zdGdyZXM6NTQzMi8ke1BPU1RHUkVTX0RCfQogICAgICBEQVRBQkFTRV9TQ0hFTUE6IHN1Ym1pc3Npb25zCiAgICAgIFJFRElTX1VSTDogcmVkaXM6Ly9yZWRpczo2Mzc5LzAKICAgICAgQUVBVF9TSU1VTEFUSU9OOiAke0FFQVRfU0lNVUxBVElPTjotYWNjZXB0fQogICAgICBBRUFUX0ZBSUxVUkVfUkFURTogJHtBRUFUX0ZBSUxVUkVfUkFURTotMC41fQogICAgICBTVUJNSVNTSU9OX01BWF9BVFRFTVBUUzogJHtTVUJNSVNTSU9OX01BWF9BVFRFTVBUUzotNX0KICAgICAgU1VCTUlTU0lPTl9SRVRSWV9CQVNFX1NFQ09ORFM6ICR7U1VCTUlTU0lPTl9SRVRSWV9CQVNFX1NFQ09ORFM6LTV9CiAgICBwb3J0czoKICAgICAgLSAiODAwMzo4MDAzIgogICAgbmV0d29ya3M6CiAgICAgIC0gZWRnZQogICAgICAtIGRhdGEKICAgIGRlcGVuZHNfb246CiAgICAgIHBvc3RncmVzOgogICAgICAgIGNvbmRpdGlvbjogc2VydmljZV9oZWFsdGh5CiAgICAgIHJlZGlzOgogICAgICAgIGNvbmRpdGlvbjogc2VydmljZV9oZWFsdGh5CgpuZXR3b3JrczoKICAjIE5ldHdvcmsgdGhyb3VnaCB3aGljaCB0aGUgc2VydmljZXMgYXJlIHB1Ymxpc2hlZC4KICBlZGdlOgogICMgUHJpdmF0ZSBuZXR3b3JrIGZvciB0aGUgZGF0YSBzdG9yZXM6IG5vdCByZWFjaGFibGUgZnJvbSBvdXRzaWRlIGFuZCB3aXRoIG5vIGludGVybmV0IGFjY2Vzcy4KICBkYXRhOgogICAgaW50ZXJuYWw6IHRydWUKCnZvbHVtZXM6CiAgcmVkaXMtZGF0YToK" | base64 -d > /opt/verifactu/compose.yaml
+            echo "LS0gT25lIHNjaGVtYSBwZXIgc2VydmljZSBpbnNpZGUgdGhlIHNpbmdsZSBQb3N0Z3JlU1FMIGluc3RhbmNlLg0KLS0gQnkgY29udmVudGlvbiBlYWNoIHNlcnZpY2Ugb25seSB0b3VjaGVzIHRoZSB0YWJsZXMgaW4gaXRzIG93biBzY2hlbWEuDQotLSBUaGlzIGlzIG5vdCBlbmZvcmNlZCB5ZXQ6IGFsbCBzZXJ2aWNlcyBzaGFyZSBvbmUgZGF0YWJhc2UgdXNlci4NCkNSRUFURSBTQ0hFTUEgSUYgTk9UIEVYSVNUUyBkb2N1bWVudHM7DQpDUkVBVEUgU0NIRU1BIElGIE5PVCBFWElTVFMgdHJhY2VhYmlsaXR5Ow0KQ1JFQVRFIFNDSEVNQSBJRiBOT1QgRVhJU1RTIHN1Ym1pc3Npb25zOw0K" | base64 -d > /opt/verifactu/db/init/01-schemas.sql
+            
+            echo "== Configuration"
+            # The permission to read the password may take a few seconds to reach the instance.
+            PASSWORD=""
+            for attempt in $(seq 1 12); do
+              PASSWORD=$(aws ssm get-parameter --name "/verifactu-trace/db-password" --with-decryption \
+                --query Parameter.Value --output text --region "eu-north-1") && break
+              sleep 10
+            done
+            [[ -n "$PASSWORD" ]] || { echo "The password could not be read"; exit 1; }
+            umask 077
+            cat > /opt/verifactu/.env <<ENV
+            POSTGRES_USER=verifactu
+            POSTGRES_PASSWORD=$PASSWORD
+            POSTGRES_DB=verifactu
+            IMAGE_REGISTRY=ghcr.io/pablomatgom/verifactu-trace
+            IMAGE_TAG=latest
+            ENV
+            
+            echo "== Start"
+            cd /opt/verifactu
+            docker compose up -d
+            docker compose ps
+            echo "== Done"
+        EOT -> null
+      - user_data_replace_on_change          = true -> null
+      - vpc_security_group_ids               = [
+          - "sg-0eccc796296662efe",
+        ] -> null
+        # (8 unchanged attributes hidden)
+
+      - capacity_reservation_specification {
+          - capacity_reservation_preference = "open" -> null
+        }
+
+      - cpu_options {
+          - core_count            = 1 -> null
+          - threads_per_core      = 2 -> null
+            # (2 unchanged attributes hidden)
+        }
+
+      - credit_specification {
+          - cpu_credits = "unlimited" -> null
+        }
+
+      - ebs_block_device {
+          - delete_on_termination = false -> null
+          - device_name           = "/dev/sdf" -> null
+          - encrypted             = true -> null
+          - iops                  = 3000 -> null
+          - kms_key_id            = "arn:aws:kms:eu-north-1:529470780070:key/a3aefcf9-e443-4cb9-8488-75d5320be5a7" -> null
+          - tags                  = {
+              - "ManagedBy" = "terraform"
+              - "Name"      = "verifactu-trace-postgres-data"
+              - "Project"   = "verifactu-trace"
+            } -> null
+          - tags_all              = {
+              - "ManagedBy" = "terraform"
+              - "Name"      = "verifactu-trace-postgres-data"
+              - "Project"   = "verifactu-trace"
+            } -> null
+          - throughput            = 125 -> null
+          - volume_id             = "vol-0fcff82b08ea2815c" -> null
+          - volume_size           = 10 -> null
+          - volume_type           = "gp3" -> null
+            # (1 unchanged attribute hidden)
+        }
+
+      - enclave_options {
+          - enabled = false -> null
+        }
+
+      - maintenance_options {
+          - auto_recovery = "default" -> null
+        }
+
+      - metadata_options {
+          - http_endpoint               = "enabled" -> null
+          - http_protocol_ipv6          = "disabled" -> null
+          - http_put_response_hop_limit = 2 -> null
+          - http_tokens                 = "required" -> null
+          - instance_metadata_tags      = "disabled" -> null
+        }
+
+      - primary_network_interface {
+          - delete_on_termination = true -> null
+          - network_interface_id  = "eni-0bf1ee4503f17339a" -> null
+        }
+
+      - private_dns_name_options {
+          - enable_resource_name_dns_a_record    = false -> null
+          - enable_resource_name_dns_aaaa_record = false -> null
+          - hostname_type                        = "ip-name" -> null
+        }
+
+      - root_block_device {
+          - delete_on_termination = true -> null
+          - device_name           = "/dev/xvda" -> null
+          - encrypted             = true -> null
+          - iops                  = 3000 -> null
+          - kms_key_id            = "arn:aws:kms:eu-north-1:529470780070:key/a3aefcf9-e443-4cb9-8488-75d5320be5a7" -> null
+          - tags                  = {} -> null
+          - tags_all              = {
+              - "ManagedBy" = "terraform"
+              - "Project"   = "verifactu-trace"
+            } -> null
+          - throughput            = 125 -> null
+          - volume_id             = "vol-0810688681187ce3c" -> null
+          - volume_size           = 20 -> null
+          - volume_type           = "gp3" -> null
+        }
+    }
+
+  # module.compute.aws_ssm_parameter.db_password will be destroyed
+  - resource "aws_ssm_parameter" "db_password" {
+      - arn             = "arn:aws:ssm:eu-north-1:529470780070:parameter/verifactu-trace/db-password" -> null
+      - data_type       = "text" -> null
+      - has_value_wo    = false -> null
+      - id              = "/verifactu-trace/db-password" -> null
+      - key_id          = "alias/aws/ssm" -> null
+      - name            = "/verifactu-trace/db-password" -> null
+      - region          = "eu-north-1" -> null
+      - tags            = {} -> null
+      - tags_all        = {
+          - "ManagedBy" = "terraform"
+          - "Project"   = "verifactu-trace"
+        } -> null
+      - tier            = "Standard" -> null
+      - type            = "SecureString" -> null
+      - value           = (sensitive value) -> null
+      - value_wo        = (write-only attribute) -> null
+      - version         = 1 -> null
+        # (2 unchanged attributes hidden)
+    }
+
+  # module.compute.aws_volume_attachment.postgres_data will be destroyed
+  - resource "aws_volume_attachment" "postgres_data" {
+      - device_name                    = "/dev/sdf" -> null
+      - id                             = "vai-4028365416" -> null
+      - instance_id                    = "i-0363ebf83e73259f7" -> null
+      - region                         = "eu-north-1" -> null
+      - stop_instance_before_detaching = true -> null
+      - volume_id                      = "vol-0fcff82b08ea2815c" -> null
+    }
+
+  # module.network.aws_default_security_group.default will be destroyed
+  - resource "aws_default_security_group" "default" {
+      - arn                    = "arn:aws:ec2:eu-north-1:529470780070:security-group/sg-0db38708573c12e41" -> null
+      - description            = "default VPC security group" -> null
+      - egress                 = [] -> null
+      - id                     = "sg-0db38708573c12e41" -> null
+      - ingress                = [] -> null
+      - name                   = "default" -> null
+      - owner_id               = "529470780070" -> null
+      - region                 = "eu-north-1" -> null
+      - revoke_rules_on_delete = false -> null
+      - tags                   = {
+          - "Name" = "verifactu-trace-default-unused"
+        } -> null
+      - tags_all               = {
+          - "ManagedBy" = "terraform"
+          - "Name"      = "verifactu-trace-default-unused"
+          - "Project"   = "verifactu-trace"
+        } -> null
+      - vpc_id                 = "vpc-0048ca410df2744c2" -> null
+        # (1 unchanged attribute hidden)
+    }
+
+  # module.network.aws_internet_gateway.main will be destroyed
+  - resource "aws_internet_gateway" "main" {
+      - arn      = "arn:aws:ec2:eu-north-1:529470780070:internet-gateway/igw-08434054e97af5656" -> null
+      - id       = "igw-08434054e97af5656" -> null
+      - owner_id = "529470780070" -> null
+      - region   = "eu-north-1" -> null
+      - tags     = {
+          - "Name" = "verifactu-trace-igw"
+        } -> null
+      - tags_all = {
+          - "ManagedBy" = "terraform"
+          - "Name"      = "verifactu-trace-igw"
+          - "Project"   = "verifactu-trace"
+        } -> null
+      - vpc_id   = "vpc-0048ca410df2744c2" -> null
+    }
+
+  # module.network.aws_route_table.private will be destroyed
+  - resource "aws_route_table" "private" {
+      - arn              = "arn:aws:ec2:eu-north-1:529470780070:route-table/rtb-03a21364990bbb441" -> null
+      - id               = "rtb-03a21364990bbb441" -> null
+      - owner_id         = "529470780070" -> null
+      - propagating_vgws = [] -> null
+      - region           = "eu-north-1" -> null
+      - route            = [] -> null
+      - tags             = {
+          - "Name" = "verifactu-trace-private"
+        } -> null
+      - tags_all         = {
+          - "ManagedBy" = "terraform"
+          - "Name"      = "verifactu-trace-private"
+          - "Project"   = "verifactu-trace"
+        } -> null
+      - vpc_id           = "vpc-0048ca410df2744c2" -> null
+    }
+
+  # module.network.aws_route_table.public will be destroyed
+  - resource "aws_route_table" "public" {
+      - arn              = "arn:aws:ec2:eu-north-1:529470780070:route-table/rtb-04c5c9b670512b74f" -> null
+      - id               = "rtb-04c5c9b670512b74f" -> null
+      - owner_id         = "529470780070" -> null
+      - propagating_vgws = [] -> null
+      - region           = "eu-north-1" -> null
+      - route            = [
+          - {
+              - cidr_block                 = "0.0.0.0/0"
+              - gateway_id                 = "igw-08434054e97af5656"
+                # (12 unchanged attributes hidden)
+            },
+        ] -> null
+      - tags             = {
+          - "Name" = "verifactu-trace-public"
+        } -> null
+      - tags_all         = {
+          - "ManagedBy" = "terraform"
+          - "Name"      = "verifactu-trace-public"
+          - "Project"   = "verifactu-trace"
+        } -> null
+      - vpc_id           = "vpc-0048ca410df2744c2" -> null
+    }
+
+  # module.network.aws_route_table_association.private will be destroyed
+  - resource "aws_route_table_association" "private" {
+      - id             = "rtbassoc-0cdb24c7d22df8a13" -> null
+      - region         = "eu-north-1" -> null
+      - route_table_id = "rtb-03a21364990bbb441" -> null
+      - subnet_id      = "subnet-0fe9ddaa4caee7554" -> null
+        # (1 unchanged attribute hidden)
+    }
+
+  # module.network.aws_route_table_association.public will be destroyed
+  - resource "aws_route_table_association" "public" {
+      - id             = "rtbassoc-0c931344bd48d93a3" -> null
+      - region         = "eu-north-1" -> null
+      - route_table_id = "rtb-04c5c9b670512b74f" -> null
+      - subnet_id      = "subnet-0c153825925ddbd33" -> null
+        # (1 unchanged attribute hidden)
+    }
+
+  # module.network.aws_security_group.compute will be destroyed
+  - resource "aws_security_group" "compute" {
+      - arn                    = "arn:aws:ec2:eu-north-1:529470780070:security-group/sg-0eccc796296662efe" -> null
+      - description            = "Compute instance: the ports of the application" -> null
+      - egress                 = [
+          - {
+              - cidr_blocks      = [
+                  - "0.0.0.0/0",
+                ]
+              - description      = "All the outgoing traffic"
+              - from_port        = 0
+              - ipv6_cidr_blocks = []
+              - prefix_list_ids  = []
+              - protocol         = "-1"
+              - security_groups  = []
+              - self             = false
+              - to_port          = 0
+            },
+        ] -> null
+      - id                     = "sg-0eccc796296662efe" -> null
+      - ingress                = [
+          - {
+              - cidr_blocks      = [
+                  - "0.0.0.0/0",
+                ]
+              - description      = "Application port 8001"
+              - from_port        = 8001
+              - ipv6_cidr_blocks = []
+              - prefix_list_ids  = []
+              - protocol         = "tcp"
+              - security_groups  = []
+              - self             = false
+              - to_port          = 8001
+            },
+          - {
+              - cidr_blocks      = [
+                  - "0.0.0.0/0",
+                ]
+              - description      = "Application port 8002"
+              - from_port        = 8002
+              - ipv6_cidr_blocks = []
+              - prefix_list_ids  = []
+              - protocol         = "tcp"
+              - security_groups  = []
+              - self             = false
+              - to_port          = 8002
+            },
+          - {
+              - cidr_blocks      = [
+                  - "0.0.0.0/0",
+                ]
+              - description      = "Application port 8003"
+              - from_port        = 8003
+              - ipv6_cidr_blocks = []
+              - prefix_list_ids  = []
+              - protocol         = "tcp"
+              - security_groups  = []
+              - self             = false
+              - to_port          = 8003
+            },
+        ] -> null
+      - name                   = "verifactu-trace-compute" -> null
+      - owner_id               = "529470780070" -> null
+      - region                 = "eu-north-1" -> null
+      - revoke_rules_on_delete = false -> null
+      - tags                   = {
+          - "Name" = "verifactu-trace-compute"
+        } -> null
+      - tags_all               = {
+          - "ManagedBy" = "terraform"
+          - "Name"      = "verifactu-trace-compute"
+          - "Project"   = "verifactu-trace"
+        } -> null
+      - vpc_id                 = "vpc-0048ca410df2744c2" -> null
+        # (1 unchanged attribute hidden)
+    }
+
+  # module.network.aws_subnet.private will be destroyed
+  - resource "aws_subnet" "private" {
+      - arn                                            = "arn:aws:ec2:eu-north-1:529470780070:subnet/subnet-0fe9ddaa4caee7554" -> null
+      - assign_ipv6_address_on_creation                = false -> null
+      - availability_zone                              = "eu-north-1a" -> null
+      - availability_zone_id                           = "eun1-az1" -> null
+      - cidr_block                                     = "10.0.2.0/24" -> null
+      - enable_dns64                                   = false -> null
+      - enable_lni_at_device_index                     = 0 -> null
+      - enable_resource_name_dns_a_record_on_launch    = false -> null
+      - enable_resource_name_dns_aaaa_record_on_launch = false -> null
+      - id                                             = "subnet-0fe9ddaa4caee7554" -> null
+      - ipv6_native                                    = false -> null
+      - map_customer_owned_ip_on_launch                = false -> null
+      - map_public_ip_on_launch                        = false -> null
+      - owner_id                                       = "529470780070" -> null
+      - private_dns_hostname_type_on_launch            = "ip-name" -> null
+      - region                                         = "eu-north-1" -> null
+      - tags                                           = {
+          - "Name" = "verifactu-trace-private"
+        } -> null
+      - tags_all                                       = {
+          - "ManagedBy" = "terraform"
+          - "Name"      = "verifactu-trace-private"
+          - "Project"   = "verifactu-trace"
+        } -> null
+      - vpc_id                                         = "vpc-0048ca410df2744c2" -> null
+        # (4 unchanged attributes hidden)
+    }
+
+  # module.network.aws_subnet.public will be destroyed
+  - resource "aws_subnet" "public" {
+      - arn                                            = "arn:aws:ec2:eu-north-1:529470780070:subnet/subnet-0c153825925ddbd33" -> null
+      - assign_ipv6_address_on_creation                = false -> null
+      - availability_zone                              = "eu-north-1a" -> null
+      - availability_zone_id                           = "eun1-az1" -> null
+      - cidr_block                                     = "10.0.1.0/24" -> null
+      - enable_dns64                                   = false -> null
+      - enable_lni_at_device_index                     = 0 -> null
+      - enable_resource_name_dns_a_record_on_launch    = false -> null
+      - enable_resource_name_dns_aaaa_record_on_launch = false -> null
+      - id                                             = "subnet-0c153825925ddbd33" -> null
+      - ipv6_native                                    = false -> null
+      - map_customer_owned_ip_on_launch                = false -> null
+      - map_public_ip_on_launch                        = false -> null
+      - owner_id                                       = "529470780070" -> null
+      - private_dns_hostname_type_on_launch            = "ip-name" -> null
+      - region                                         = "eu-north-1" -> null
+      - tags                                           = {
+          - "Name" = "verifactu-trace-public"
+        } -> null
+      - tags_all                                       = {
+          - "ManagedBy" = "terraform"
+          - "Name"      = "verifactu-trace-public"
+          - "Project"   = "verifactu-trace"
+        } -> null
+      - vpc_id                                         = "vpc-0048ca410df2744c2" -> null
+        # (4 unchanged attributes hidden)
+    }
+
+  # module.network.aws_vpc.main will be destroyed
+  - resource "aws_vpc" "main" {
+      - arn                                  = "arn:aws:ec2:eu-north-1:529470780070:vpc/vpc-0048ca410df2744c2" -> null
+      - assign_generated_ipv6_cidr_block     = false -> null
+      - cidr_block                           = "10.0.0.0/16" -> null
+      - default_network_acl_id               = "acl-06451aebee606319d" -> null
+      - default_route_table_id               = "rtb-052c817f79b25bc78" -> null
+      - default_security_group_id            = "sg-0db38708573c12e41" -> null
+      - dhcp_options_id                      = "dopt-0e0262bb22daf20a0" -> null
+      - enable_dns_hostnames                 = true -> null
+      - enable_dns_support                   = true -> null
+      - enable_network_address_usage_metrics = false -> null
+      - id                                   = "vpc-0048ca410df2744c2" -> null
+      - instance_tenancy                     = "default" -> null
+      - ipv6_netmask_length                  = 0 -> null
+      - main_route_table_id                  = "rtb-052c817f79b25bc78" -> null
+      - owner_id                             = "529470780070" -> null
+      - region                               = "eu-north-1" -> null
+      - tags                                 = {
+          - "Name" = "verifactu-trace-vpc"
+        } -> null
+      - tags_all                             = {
+          - "ManagedBy" = "terraform"
+          - "Name"      = "verifactu-trace-vpc"
+          - "Project"   = "verifactu-trace"
+        } -> null
+        # (4 unchanged attributes hidden)
+    }
+
+  # module.network.aws_vpc_security_group_egress_rule.compute_all will be destroyed
+  - resource "aws_vpc_security_group_egress_rule" "compute_all" {
+      - arn                    = "arn:aws:ec2:eu-north-1:529470780070:security-group-rule/sgr-0c7adc87a56c34c7e" -> null
+      - cidr_ipv4              = "0.0.0.0/0" -> null
+      - description            = "All the outgoing traffic" -> null
+      - id                     = "sgr-0c7adc87a56c34c7e" -> null
+      - ip_protocol            = "-1" -> null
+      - region                 = "eu-north-1" -> null
+      - security_group_id      = "sg-0eccc796296662efe" -> null
+      - security_group_rule_id = "sgr-0c7adc87a56c34c7e" -> null
+      - tags_all               = {
+          - "ManagedBy" = "terraform"
+          - "Project"   = "verifactu-trace"
+        } -> null
+    }
+
+  # module.network.aws_vpc_security_group_ingress_rule.app["8001-0.0.0.0/0"] will be destroyed
+  - resource "aws_vpc_security_group_ingress_rule" "app" {
+      - arn                    = "arn:aws:ec2:eu-north-1:529470780070:security-group-rule/sgr-08b5c8c68fcb53899" -> null
+      - cidr_ipv4              = "0.0.0.0/0" -> null
+      - description            = "Application port 8001" -> null
+      - from_port              = 8001 -> null
+      - id                     = "sgr-08b5c8c68fcb53899" -> null
+      - ip_protocol            = "tcp" -> null
+      - region                 = "eu-north-1" -> null
+      - security_group_id      = "sg-0eccc796296662efe" -> null
+      - security_group_rule_id = "sgr-08b5c8c68fcb53899" -> null
+      - tags_all               = {
+          - "ManagedBy" = "terraform"
+          - "Project"   = "verifactu-trace"
+        } -> null
+      - to_port                = 8001 -> null
+    }
+
+  # module.network.aws_vpc_security_group_ingress_rule.app["8002-0.0.0.0/0"] will be destroyed
+  - resource "aws_vpc_security_group_ingress_rule" "app" {
+      - arn                    = "arn:aws:ec2:eu-north-1:529470780070:security-group-rule/sgr-0db46b4a35fd82079" -> null
+      - cidr_ipv4              = "0.0.0.0/0" -> null
+      - description            = "Application port 8002" -> null
+      - from_port              = 8002 -> null
+      - id                     = "sgr-0db46b4a35fd82079" -> null
+      - ip_protocol            = "tcp" -> null
+      - region                 = "eu-north-1" -> null
+      - security_group_id      = "sg-0eccc796296662efe" -> null
+      - security_group_rule_id = "sgr-0db46b4a35fd82079" -> null
+      - tags_all               = {
+          - "ManagedBy" = "terraform"
+          - "Project"   = "verifactu-trace"
+        } -> null
+      - to_port                = 8002 -> null
+    }
+
+  # module.network.aws_vpc_security_group_ingress_rule.app["8003-0.0.0.0/0"] will be destroyed
+  - resource "aws_vpc_security_group_ingress_rule" "app" {
+      - arn                    = "arn:aws:ec2:eu-north-1:529470780070:security-group-rule/sgr-0a5150cc95d2b5d48" -> null
+      - cidr_ipv4              = "0.0.0.0/0" -> null
+      - description            = "Application port 8003" -> null
+      - from_port              = 8003 -> null
+      - id                     = "sgr-0a5150cc95d2b5d48" -> null
+      - ip_protocol            = "tcp" -> null
+      - region                 = "eu-north-1" -> null
+      - security_group_id      = "sg-0eccc796296662efe" -> null
+      - security_group_rule_id = "sgr-0a5150cc95d2b5d48" -> null
+      - tags_all               = {
+          - "ManagedBy" = "terraform"
+          - "Project"   = "verifactu-trace"
+        } -> null
+      - to_port                = 8003 -> null
+    }
+
+  # module.storage.aws_ebs_volume.postgres_data will be destroyed
+  - resource "aws_ebs_volume" "postgres_data" {
+      - arn                        = "arn:aws:ec2:eu-north-1:529470780070:volume/vol-0fcff82b08ea2815c" -> null
+      - availability_zone          = "eu-north-1a" -> null
+      - create_time                = "2026-11-17T20:43:25Z" -> null
+      - encrypted                  = true -> null
+      - final_snapshot             = false -> null
+      - id                         = "vol-0fcff82b08ea2815c" -> null
+      - iops                       = 3000 -> null
+      - kms_key_id                 = "arn:aws:kms:eu-north-1:529470780070:key/a3aefcf9-e443-4cb9-8488-75d5320be5a7" -> null
+      - multi_attach_enabled       = false -> null
+      - region                     = "eu-north-1" -> null
+      - size                       = 10 -> null
+      - tags                       = {
+          - "Name" = "verifactu-trace-postgres-data"
+        } -> null
+      - tags_all                   = {
+          - "ManagedBy" = "terraform"
+          - "Name"      = "verifactu-trace-postgres-data"
+          - "Project"   = "verifactu-trace"
+        } -> null
+      - throughput                 = 125 -> null
+      - type                       = "gp3" -> null
+      - volume_initialization_rate = 0 -> null
+        # (2 unchanged attributes hidden)
+    }
+
+Plan: 0 to add, 0 to change, 22 to destroy.
+
+Changes to Outputs:
+  - account_id                = "529470780070" -> null
+  - availability_zone         = "eu-north-1a" -> null
+  - compute_security_group_id = "sg-0eccc796296662efe" -> null
+  - data_volume_id            = "vol-0fcff82b08ea2815c" -> null
+  - health_urls               = [
+      - "http://13.49.224.245:8001/health",
+      - "http://13.49.224.245:8002/health",
+      - "http://13.49.224.245:8003/health",
+    ] -> null
+  - instance_id               = "i-0363ebf83e73259f7" -> null
+  - private_subnet_id         = "subnet-0fe9ddaa4caee7554" -> null
+  - public_ip                 = "13.49.224.245" -> null
+  - public_subnet_id          = "subnet-0c153825925ddbd33" -> null
+  - region                    = "eu-north-1" -> null
+  - vpc_id                    = "vpc-0048ca410df2744c2" -> null
+module.compute.aws_iam_role_policy_attachment.ssm_core: Destroying... [id=verifactu-trace-app/arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore]
+module.network.aws_route_table_association.public: Destroying... [id=rtbassoc-0c931344bd48d93a3]
+module.network.aws_route_table_association.private: Destroying... [id=rtbassoc-0cdb24c7d22df8a13]
+module.compute.aws_volume_attachment.postgres_data: Destroying... [id=vai-4028365416]
+module.network.aws_default_security_group.default: Destroying... [id=sg-0db38708573c12e41]
+module.network.aws_vpc_security_group_egress_rule.compute_all: Destroying... [id=sgr-0c7adc87a56c34c7e]
+module.network.aws_vpc_security_group_ingress_rule.app["8001-0.0.0.0/0"]: Destroying... [id=sgr-08b5c8c68fcb53899]
+module.network.aws_vpc_security_group_ingress_rule.app["8002-0.0.0.0/0"]: Destroying... [id=sgr-0db46b4a35fd82079]
+module.network.aws_vpc_security_group_ingress_rule.app["8003-0.0.0.0/0"]: Destroying... [id=sgr-0a5150cc95d2b5d48]
+module.network.aws_default_security_group.default: Destruction complete after 0s
+module.network.aws_vpc_security_group_ingress_rule.app["8002-0.0.0.0/0"]: Destruction complete after 1s
+module.compute.aws_iam_role_policy_attachment.ssm_core: Destruction complete after 1s
+module.network.aws_vpc_security_group_ingress_rule.app["8003-0.0.0.0/0"]: Destruction complete after 1s
+module.network.aws_route_table_association.public: Destruction complete after 1s
+module.network.aws_vpc_security_group_ingress_rule.app["8001-0.0.0.0/0"]: Destruction complete after 1s
+module.network.aws_route_table.public: Destroying... [id=rtb-04c5c9b670512b74f]
+module.network.aws_route_table_association.private: Destruction complete after 1s
+module.network.aws_route_table.private: Destroying... [id=rtb-03a21364990bbb441]
+module.network.aws_subnet.private: Destroying... [id=subnet-0fe9ddaa4caee7554]
+module.network.aws_vpc_security_group_egress_rule.compute_all: Destruction complete after 1s
+module.network.aws_subnet.private: Destruction complete after 1s
+module.network.aws_route_table.public: Destruction complete after 1s
+module.network.aws_internet_gateway.main: Destroying... [id=igw-08434054e97af5656]
+module.network.aws_route_table.private: Destruction complete after 1s
+module.compute.aws_volume_attachment.postgres_data: Still destroying... [id=vai-4028365416, 00m10s elapsed]
+module.network.aws_internet_gateway.main: Still destroying... [id=igw-08434054e97af5656, 00m10s elapsed]
+module.network.aws_internet_gateway.main: Destruction complete after 18s
+module.compute.aws_volume_attachment.postgres_data: Still destroying... [id=vai-4028365416, 00m20s elapsed]
+module.compute.aws_volume_attachment.postgres_data: Still destroying... [id=vai-4028365416, 00m30s elapsed]
+module.compute.aws_volume_attachment.postgres_data: Destruction complete after 31s
+module.compute.aws_instance.app: Destroying... [id=i-0363ebf83e73259f7]
+module.compute.aws_instance.app: Still destroying... [id=i-0363ebf83e73259f7, 00m10s elapsed]
+module.compute.aws_instance.app: Destruction complete after 10s
+module.compute.aws_iam_role_policy.read_password: Destroying... [id=verifactu-trace-app:read-db-password]
+module.compute.aws_iam_instance_profile.app: Destroying... [id=verifactu-trace-app]
+module.storage.aws_ebs_volume.postgres_data: Destroying... [id=vol-0fcff82b08ea2815c]
+module.network.aws_subnet.public: Destroying... [id=subnet-0c153825925ddbd33]
+module.network.aws_security_group.compute: Destroying... [id=sg-0eccc796296662efe]
+module.compute.aws_iam_role_policy.read_password: Destruction complete after 1s
+module.compute.aws_ssm_parameter.db_password: Destroying... [id=/verifactu-trace/db-password]
+module.compute.aws_iam_instance_profile.app: Destruction complete after 1s
+module.compute.aws_iam_role.app: Destroying... [id=verifactu-trace-app]
+module.compute.aws_ssm_parameter.db_password: Destruction complete after 0s
+module.network.aws_security_group.compute: Destruction complete after 1s
+module.network.aws_subnet.public: Destruction complete after 1s
+module.network.aws_vpc.main: Destroying... [id=vpc-0048ca410df2744c2]
+module.compute.aws_iam_role.app: Destruction complete after 1s
+module.network.aws_vpc.main: Destruction complete after 1s
+module.storage.aws_ebs_volume.postgres_data: Still destroying... [id=vol-0fcff82b08ea2815c, 00m10s elapsed]
+module.storage.aws_ebs_volume.postgres_data: Destruction complete after 11s
+
+Destroy complete! Resources: 22 destroyed.

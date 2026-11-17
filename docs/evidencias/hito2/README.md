@@ -1,6 +1,6 @@
 # Evidencias del Hito 2
 
-Pruebas de que lo descrito en [`hito2.md`](../hito2.md) funciona. Hay dos tipos: la **salida de terminal**, guardada como texto y reproducible con los comandos que aparecen en cada fichero, y las **páginas web guardadas como PDF** (GitHub, SonarCloud y Swagger), que no se pueden obtener desde la línea de órdenes.
+Pruebas de que lo descrito en [`hito2.md`](../../hito2.md) funciona. Hay dos tipos: la **salida de terminal**, guardada como texto y reproducible con los comandos que aparecen en cada fichero, y las **páginas web guardadas como PDF** (GitHub, SonarCloud y Swagger), que no se pueden obtener desde la línea de órdenes.
 
 | Evidencia | Qué demuestra | Requisito del enunciado |
 |---|---|---|
@@ -20,4 +20,4 @@ Pruebas de que lo descrito en [`hito2.md`](../hito2.md) funciona. Hay dos tipos:
   - `make` no está instalado en el Windows de desarrollo, así que `make-test.txt` se generó en un contenedor `python:3.12` con una PostgreSQL 17 y una Redis 7 desechables. El CI ejecuta los mismos objetivos en `ubuntu-24.04`.
   - `ghcr.txt` se consultó sin credenciales: la comprobación anónima es lo que demuestra que los paquetes son públicos.
 - **Páginas web en PDF.** Las de GitHub, SonarCloud y Swagger se guardan desde el navegador (imprimir y guardar como PDF). Conservan el texto y los números, y llevan la fecha y la URL en el pie; el de GitHub, además, el commit en el título. Se enlazan y no se incrustan, porque Markdown no muestra PDFs.
-- **Los 7 *issues* de SonarCloud.** El panel muestra "Issues: 7", pero los siete están marcados como *Accepted*: la instalación de dependencias sin versiones bloqueadas con *hashes* en los Dockerfiles y en `ci.yml` (regla `S8544`) y la instalación sin `--only-binary` en `ci.yml` (`S8541`). Es una limitación conocida y documentada en [`docker.md`](../docker.md). No hay ningún *issue* abierto.
+- **Los 7 *issues* de SonarCloud.** El panel muestra "Issues: 7", pero los siete están marcados como *Accepted*: la instalación de dependencias sin versiones bloqueadas con *hashes* en los Dockerfiles y en `ci.yml` (regla `S8544`) y la instalación sin `--only-binary` en `ci.yml` (`S8541`). Es una limitación conocida y documentada en [`docker.md`](../../docker.md). No hay ningún *issue* abierto.
