@@ -1,6 +1,6 @@
 # Decisiones del Hito 3
 
-Este documento recoge las decisiones del Hito 3 (infraestructura como código con Terraform). Se completa a medida que se construyen las capas de la infraestructura. Cómo está organizado el código está en [`terraform.md`](terraform.md), y los conceptos y comandos de AWS en [`aws.md`](aws.md).
+Este documento recoge las decisiones del Hito 3 (infraestructura como código con Terraform). Se completa a medida que se construyen las capas de la infraestructura. Cómo está organizado el código está en [`terraform.md`](terraform.md), y los conceptos y comandos de AWS en [`aws.md`](aws.md). Los diagramas de lo que se despliega están en [`despliegue.md`](despliegue.md).
 
 ## Proveedor de nube
 
@@ -83,7 +83,7 @@ Definida en el módulo [`infra/modules/network`](../infra/modules/network/) (14 
 | Sin *NAT Gateway* | Tiene un coste fijo por hora y la subred privada no necesita salir a Internet |
 | La subred pública no asigna IP pública por sí sola | La pedirá la instancia que se cree en ella |
 | El grupo de seguridad del servidor abre solo los puertos de la aplicación (8001, 8002 y 8003) y deja salir todo el tráfico | La instancia necesita descargar las imágenes de GHCR |
-| El puerto 22 (SSH) está cerrado, salvo que se indique una dirección en `admin_cidr_blocks` | Mínimo privilegio: el acceso de administración se decide al crear el servidor |
+| No hay ninguna regla para el puerto 22 (SSH) | La instancia se administra con Session Manager (ver [Capa de cómputo](#capa-de-cómputo)), que no necesita ningún puerto abierto ni claves |
 | Los puertos 5432 (PostgreSQL) y 6379 (Redis) no se abren | Son contenedores de la instancia y hablan con los servicios dentro de ella |
 | El grupo de seguridad por defecto de la VPC se declara sin reglas | Un recurso creado sin indicar grupo no hereda ningún permiso |
 
@@ -126,11 +126,67 @@ El módulo de almacenamiento no necesita devolver ninguna dirección: PostgreSQL
 - **Redis no usa este disco.** El *stream* de eventos de Redis queda en el disco de la instancia. La fuente de la verdad es PostgreSQL, y el *stream* solo transporta los eventos hasta que se procesan.
 - **Una sola zona.** Si esa zona falla, no hay conmutación a otra.
 
+## Capa de cómputo
+
+Definida en el módulo [`infra/modules/compute`](../infra/modules/compute/): una instancia de EC2 que instala Docker, monta el disco de datos y arranca el sistema completo con las imágenes publicadas en GHCR.
+
+| Decisión | Motivo |
+|---|---|
+| Instancia `t3.small` (2 GB) | Ejecuta cinco contenedores (los tres servicios, PostgreSQL y Redis). Con 1 GB iría justa |
+| Arquitectura x86, no ARM | Las imágenes se construyen solo para amd64 |
+| Amazon Linux 2023 | Imagen oficial de AWS, con el agente de Systems Manager y la AWS CLI ya incluidos |
+| Arranque con `user_data`, en un script de la plantilla [`user_data.sh.tftpl`](../infra/modules/compute/templates/user_data.sh.tftpl) | Es la forma habitual de configurar una instancia al crearla. Un cambio en el script la sustituye |
+| `compose.yaml` propio de la nube ([`files/compose.yaml`](../infra/modules/compute/files/compose.yaml)) | Usa las imágenes de GHCR en lugar de construirlas, publica los puertos en todas las interfaces (decide el grupo de seguridad) y guarda los datos de PostgreSQL en el disco |
+| Docker Compose se descarga con versión y suma de comprobación fijadas | No está en los repositorios de Amazon Linux, y una descarga sin verificar sería un riesgo |
+| Acceso con Session Manager, sin SSH | No se abre el puerto 22 ni hay claves que guardar o rotar |
+| La contraseña de la base de datos vive en Parameter Store, no en el script | El script lo puede leer cualquiera que pueda describir la instancia. La instancia lee la contraseña al arrancar, con un permiso limitado a ese parámetro |
+| IMDSv2 obligatorio, disco raíz cifrado | Buenas prácticas de seguridad |
+| `ami` ignorada en los cambios | Una imagen nueva de Amazon Linux no debe sustituir una instancia que está funcionando |
+| El disco se desconecta parando antes la instancia (`stop_instance_before_detaching`) | Sin esto, `terraform destroy` espera a un disco que sigue en uso |
+
+### Cómo arranca el sistema
+
+El script se ejecuta una vez, en el primer arranque, y deja el registro en `/var/log/verifactu-setup.log`:
+
+1. Instala Docker y Docker Compose.
+2. Espera a que aparezca el disco de datos, lo formatea **solo si no tiene sistema de ficheros** (así conserva los datos si ya los tenía), lo monta en `/mnt/postgres` y lo añade a `/etc/fstab`.
+3. Escribe el `compose.yaml` y el script SQL que crea los esquemas (el mismo [`db/init/01-schemas.sql`](../db/init/01-schemas.sql) del repositorio).
+4. Lee la contraseña de Parameter Store y escribe el `.env`.
+5. Arranca los contenedores con `docker compose up -d`.
+
+PostgreSQL guarda sus datos en una subcarpeta del disco (`PGDATA`), porque un disco recién formateado trae una carpeta `lost+found` y PostgreSQL no inicializa un directorio de datos que no esté vacío.
+
+### Verificación
+
+Con `terraform apply` se crearon los 22 recursos (la red, el disco y las piezas de cómputo). Pasados unos minutos, los tres servicios respondieron `200` desde fuera, en `/health` de los puertos 8001, 8002 y 8003, sin haber abierto ninguna sesión en la instancia. Con una sesión de Session Manager, `docker compose ps` mostró los cinco contenedores en `healthy`. Los servicios ejecutan `alembic upgrade` al arrancar, así que las migraciones se aplicaron sobre PostgreSQL, lo que confirma que la contraseña de Parameter Store y el disco de datos funcionan.
+
+### Limitaciones
+
+- **El `compose.yaml` de la nube duplica la configuración del de la raíz.** Si se añade una variable o un servicio a uno, hay que añadirlo al otro.
+- **La dirección pública cambia** si la instancia se para y se vuelve a arrancar.
+- **Las imágenes se descargan en el primer arranque** (por defecto, `latest`), así que tarda unos minutos en responder y depende de que GHCR esté disponible.
+- **Una sola instancia**: si se cae, el servicio está caído hasta que se sustituya.
+- **Los datos de Redis no están en el disco de EBS**, sino en un volumen de Docker del disco de la instancia. Los eventos del *stream* se pierden si la instancia se sustituye o se destruye; los de PostgreSQL, no.
+- **La contraseña está en el estado de Terraform** (cifrado, en S3) además de en Parameter Store.
+- **La contraseña solo se aplica al inicializar el disco.** PostgreSQL lee `POSTGRES_PASSWORD` la primera vez que crea la base de datos; cambiarla después, con el disco ya creado, no cambia la de PostgreSQL y dejaría de coincidir con la del parámetro. Con `terraform destroy` el disco se borra, así que cada sesión puede usar una contraseña nueva.
+
+## Mejoras posibles
+
+Lo desplegado es el mínimo que cumple el enunciado: una instancia, con PostgreSQL y Redis en contenedores. Una puesta en producción cambiaría esto:
+
+| Mejora | Qué resuelve | Por qué no se hizo |
+|---|---|---|
+| **RDS** en lugar del contenedor de PostgreSQL (en la subred privada) | Copias automáticas, parches y alta disponibilidad gestionados por AWS | Coste, y complica el `destroy` y la verificación del Reconciler (ver [Persistencia](#persistencia)) |
+| **ElastiCache** en lugar del contenedor de Redis | Los eventos del *stream* sobreviven a la sustitución de la instancia, que hoy los pierde | Coste y complejidad para un solo *stream* |
+| **Varias instancias detrás de un balanceador** (Load Balancer, en varias zonas de disponibilidad) | Hoy, si la instancia cae, el servicio está caído hasta que se sustituya | Una sola instancia basta para la práctica. El balanceador llegaría con el gateway |
+| **Secrets Manager** en lugar de Parameter Store | Rotación automática de la contraseña | Parameter Store cubre lo necesario sin coste |
+| **CloudWatch** (registros y alarmas) | Hoy el registro se lee abriendo una sesión en la instancia | Corresponde a la monitorización de un hito posterior |
+| **HTTPS con dominio** (Route 53 y Certificate Manager) | Hoy el tráfico va por HTTP y a una dirección IP que cambia | Se decide con el gateway y la seguridad del Hito 4 |
+
 ## Pendiente
 
 Se completa en las issues de las capas y en la de documentación del hito:
 
-- El módulo de cómputo (los de red y de almacenamiento ya están hechos).
 - Justificación del backend remoto y del bloqueo del estado, más allá de lo descrito en [`terraform.md`](terraform.md).
 - Tabla con los entregables del enunciado y el lugar donde se cumple cada uno.
 - Cómo desplegar y destruir la infraestructura, paso a paso.

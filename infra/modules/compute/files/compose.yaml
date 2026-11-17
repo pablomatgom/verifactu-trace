@@ -1,0 +1,114 @@
+# Compose file of the cloud instance. It mirrors the compose.yaml of the repository, with three
+# differences:
+#   - the images are pulled from the registry, instead of being built;
+#   - the ports are published on every interface: the security group decides who reaches them;
+#   - the data of PostgreSQL live on the attached disk, mounted in /mnt/postgres.
+# The values come from the .env file that the instance writes when it boots.
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:?POSTGRES_USER is not set}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is not set}
+      POSTGRES_DB: ${POSTGRES_DB:?POSTGRES_DB is not set}
+      # The data go in a subfolder: the root of a freshly formatted disk has a lost+found
+      # folder, and PostgreSQL does not initialise a data directory that is not empty.
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - /mnt/postgres:/var/lib/postgresql/data
+      # Scripts run only the first time, when the data directory is empty.
+      - ./db/init:/docker-entrypoint-initdb.d:ro
+    networks:
+      - data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    # Append-only persistence, so the event streams survive a restart of the container.
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis-data:/data
+    networks:
+      - data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  document-service:
+    image: ${IMAGE_REGISTRY:?IMAGE_REGISTRY is not set}/document-service:${IMAGE_TAG:?IMAGE_TAG is not set}
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      DATABASE_SCHEMA: documents
+      REDIS_URL: redis://redis:6379/0
+    ports:
+      - "8001:8001"
+    networks:
+      - edge
+      - data
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  traceability-service:
+    image: ${IMAGE_REGISTRY}/traceability-service:${IMAGE_TAG}
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      DATABASE_SCHEMA: traceability
+      REDIS_URL: redis://redis:6379/0
+      DOCUMENT_SERVICE_URL: http://document-service:8001
+    ports:
+      - "8002:8002"
+    networks:
+      - edge
+      - data
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  submission-service:
+    image: ${IMAGE_REGISTRY}/submission-service:${IMAGE_TAG}
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      DATABASE_SCHEMA: submissions
+      REDIS_URL: redis://redis:6379/0
+      AEAT_SIMULATION: ${AEAT_SIMULATION:-accept}
+      AEAT_FAILURE_RATE: ${AEAT_FAILURE_RATE:-0.5}
+      SUBMISSION_MAX_ATTEMPTS: ${SUBMISSION_MAX_ATTEMPTS:-5}
+      SUBMISSION_RETRY_BASE_SECONDS: ${SUBMISSION_RETRY_BASE_SECONDS:-5}
+    ports:
+      - "8003:8003"
+    networks:
+      - edge
+      - data
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+networks:
+  # Network through which the services are published.
+  edge:
+  # Private network for the data stores: not reachable from outside and with no internet access.
+  data:
+    internal: true
+
+volumes:
+  redis-data:

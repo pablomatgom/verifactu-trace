@@ -5,3 +5,6 @@ Makefile text eol=lf
 # terraform fmt writes LF; with CRLF `terraform fmt -check` would fail.
 *.tf text eol=lf
 *.tfvars.example text eol=lf
+# The script of the instance runs on Linux: with CRLF, bash fails on the carriage return.
+*.tftpl text eol=lf
+infra/modules/compute/files/* text eol=lf

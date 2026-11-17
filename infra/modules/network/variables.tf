@@ -32,9 +32,3 @@ variable "app_allowed_cidr_blocks" {
   type        = list(string)
   default     = ["0.0.0.0/0"]
 }
-
-variable "admin_cidr_blocks" {
-  description = "Addresses that can reach port 22 (SSH). Empty: no administration port is open."
-  type        = list(string)
-  default     = []
-}

@@ -1,6 +1,6 @@
 # AWS: conceptos y comandos
 
-Este documento explica los conceptos de AWS que usa el proyecto y los comandos de la AWS CLI con los que se ha preparado la cuenta. La definición de la infraestructura con Terraform está en [`terraform.md`](terraform.md).
+Este documento explica los conceptos de AWS que usa el proyecto y los comandos de la AWS CLI con los que se ha preparado la cuenta. La definición de la infraestructura con Terraform está en [`terraform.md`](terraform.md), y un esquema de cómo se conectan las piezas, en [`despliegue.md`](despliegue.md).
 
 Los comandos están escritos para **PowerShell**. En el Símbolo del sistema (cmd) cambia la sintaxis de las variables (ver [Variables](#variables)).
 
@@ -15,9 +15,10 @@ AWS es un catálogo de servicios que se alquilan por uso. Cada uno hace una cosa
 | **STS** | Decir con qué identidad se está actuando | Comprobar que las credenciales funcionan |
 | **VPC** | Red privada virtual | Capa de red |
 | **EC2** | Servidor (máquina virtual) | Capa de cómputo |
+| **Systems Manager** | Gestión de instancias: terminal remoto y almacén de configuración | Acceso a la instancia y contraseña de la base de datos |
 | **EBS** | Discos (volúmenes) que se conectan a una instancia | Capa de persistencia: los datos de PostgreSQL |
 
-S3, IAM, STS, la red (VPC) y el almacenamiento (EBS) ya están en uso. EC2 se añade con la capa de cómputo.
+Todos están ya en uso.
 
 ## Cuenta, región y organización
 
@@ -64,7 +65,7 @@ bucket: verifactu-trace-tfstate-<id de cuenta>
 | **Usuario IAM** | Identidad con permisos limitados, para personas o programas | `terraform-verifactu` |
 | **Política** (*policy*) | Lista de permisos ("puede hacer X sobre Y") | `AdministratorAccess` |
 | **Clave de acceso** | Par ID y secreto que permite a un programa identificarse como un usuario | Perfil `verifactu` de la CLI |
-| **Rol** | Identidad temporal que se asume, sin claves almacenadas | Previsto para el pipeline de despliegue |
+| **Rol** | Identidad temporal que se asume, sin claves almacenadas | `verifactu-trace-app`, que usa la instancia. Previsto también para el pipeline de despliegue |
 
 ### Por qué no se trabaja con el usuario raíz
 
@@ -119,7 +120,7 @@ VPC 10.0.0.0/16
 └── Subred privada 10.0.2.0/24   ← sin ruta a Internet; de momento no aloja nada
 ```
 
-PostgreSQL y Redis son contenedores de la propia instancia y hablan con los servicios dentro de ella, así que sus puertos (5432 y 6379) **no se abren al exterior**. Es el principio de **mínimo privilegio**: cada pieza ve solo lo que necesita. El puerto 22 (SSH) tampoco está abierto, salvo que se indique una dirección en `admin_cidr_blocks`.
+PostgreSQL y Redis son contenedores de la propia instancia y hablan con los servicios dentro de ella, así que sus puertos (5432 y 6379) **no se abren al exterior**. Es el principio de **mínimo privilegio**: cada pieza ve solo lo que necesita. El puerto 22 (SSH) tampoco está abierto: la instancia se administra con Session Manager (ver [Systems Manager](#systems-manager)).
 
 AWS crea además un **grupo de seguridad por defecto** en cada VPC, que permite el tráfico entre sus miembros y en el que acaba cualquier recurso creado sin indicar grupo. El módulo lo declara **sin reglas**, de modo que Terraform se las quita todas y un recurso que llegue ahí por descuido no hereda ningún permiso.
 
@@ -144,6 +145,27 @@ Lo que conviene saber de un volumen EBS:
 - **El tipo `gp3`** es el de propósito general actual, con un rendimiento base que no depende del tamaño.
 - **Se cifra en reposo** con la clave que AWS gestiona por defecto para EBS (`encrypted = true`).
 - **Se paga por GB y por mes mientras existe**, esté conectado o no. Un disco de 10 GB cuesta muy poco, pero no es cero.
+
+## Instancias (EC2)
+
+**EC2** alquila servidores virtuales, las *instancias*. Se paga por hora mientras la instancia está encendida.
+
+| Concepto | Qué es | En el proyecto |
+|---|---|---|
+| **AMI** | La imagen del sistema con la que arranca la instancia | Amazon Linux 2023 para x86, la más reciente al crearla |
+| **Tipo de instancia** | CPU y memoria de la máquina | `t3.small` (2 GB de memoria, suficiente para cinco contenedores). Es x86 porque las imágenes se construyen solo para amd64: una instancia ARM (`t4g`) no las ejecutaría |
+| **User data** | Un script que se ejecuta una sola vez, en el primer arranque | Instala Docker, monta el disco con los datos y arranca los contenedores |
+| **IMDSv2** | El servicio por el que la instancia consulta sus propios datos (metadatos y credenciales). La versión 2 exige un token | Obligatorio (`http_tokens = "required"`), para que una petición forjada desde una aplicación no pueda robar las credenciales |
+| **Perfil de instancia** | Permite que la instancia use un rol de IAM sin guardar claves | Rol `verifactu-trace-app` |
+
+El disco de la instancia (sistema, Docker e imágenes) es distinto del disco con los datos de PostgreSQL: el primero desaparece con la instancia y el segundo no.
+
+## Systems Manager
+
+**AWS Systems Manager** agrupa herramientas para gestionar instancias. El proyecto usa dos:
+
+- **Session Manager** abre un terminal en la instancia **sin abrir ningún puerto ni usar claves SSH**. La instancia se conecta ella a AWS, y el acceso se controla con permisos de IAM. Requiere que el rol de la instancia tenga la política `AmazonSSMManagedInstanceCore`.
+- **Parameter Store** guarda valores de configuración. Un parámetro de tipo `SecureString` se guarda cifrado, y es donde vive la contraseña de la base de datos. La instancia la lee al arrancar, con un permiso que solo le deja leer ese parámetro, de modo que la contraseña no aparece en el script de arranque (que cualquiera con acceso a describir la instancia puede leer).
 
 ## Comandos de la AWS CLI
 
@@ -229,6 +251,41 @@ aws s3 ls s3://$bucket/verifactu-trace/
 ```
 
 Los tres primeros muestran la configuración aplicada: debe aparecer `AES256`, `"Status": "Enabled"` y las cuatro protecciones en `true`. El último lista el contenido: aparece `terraform.tfstate`, la prueba de que el estado está en S3. `aws s3` (sin `api`) es la versión de alto nivel, con comandos como los del terminal (`ls`, `cp`, `rm`), y la ruta `s3://bucket/carpeta/` es la forma de escribir una ubicación en S3.
+
+### Acceder a la instancia y comprobarla
+
+Para abrir sesiones hay que instalar una vez el plugin de Session Manager (después, abre una ventana nueva):
+
+```powershell
+winget install --id Amazon.SessionManagerPlugin -e
+```
+
+Con el identificador de la instancia (la salida `instance_id` de Terraform):
+
+```powershell
+aws ssm start-session --target <instance_id> --profile verifactu
+```
+
+Dentro de la sesión, el registro del arranque y el estado de los contenedores:
+
+```bash
+sudo cat /var/log/verifactu-setup.log
+cd /opt/verifactu && sudo docker compose ps
+```
+
+Si la sesión no se abre, la salida de la consola de la instancia (lo que el sistema imprimió al arrancar) se puede leer desde fuera:
+
+```powershell
+aws ec2 get-console-output --instance-id <instance_id> --latest --output text --profile verifactu
+```
+
+Y desde cualquier sitio, para comprobar que un servicio responde (las direcciones las da la salida `health_urls`):
+
+```powershell
+curl.exe http://<public_ip>:8001/health
+```
+
+En PowerShell 5.1 hay que escribir `curl.exe`: `curl` es un alias de `Invoke-WebRequest`, que pide confirmación antes de analizar la respuesta.
 
 ### `aws` y `terraform`
 

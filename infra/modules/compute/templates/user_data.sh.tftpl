@@ -1,0 +1,60 @@
+#!/bin/bash
+# Prepares the instance on its first boot: it installs Docker, mounts the data disk, reads the
+# database password and starts the system. Everything it prints is in /var/log/verifactu-setup.log.
+set -euo pipefail
+exec > >(tee -a /var/log/verifactu-setup.log) 2>&1
+
+echo "== Docker"
+dnf install -y docker
+systemctl enable --now docker
+install -d /usr/local/lib/docker/cli-plugins
+# The download is redirected to another host: both the request and the redirect are HTTPS only.
+curl -fsSL --proto "=https" --proto-redir "=https" -o /usr/local/lib/docker/cli-plugins/docker-compose \
+  "https://github.com/docker/compose/releases/download/${compose_version}/docker-compose-linux-x86_64"
+echo "${compose_sha256}  /usr/local/lib/docker/cli-plugins/docker-compose" | sha256sum --check
+chmod 755 /usr/local/lib/docker/cli-plugins/docker-compose
+
+echo "== Data disk"
+# The disk is attached after the instance starts, so it may take a while to appear. On these
+# instances it shows up as an NVMe device, with the identifier of the volume in its name.
+DEVICE=/dev/disk/by-id/nvme-Amazon_Elastic_Block_Store_${volume_device_id}
+for attempt in $(seq 1 60); do
+  [[ -e "$DEVICE" ]] && break
+  sleep 5
+done
+[[ -e "$DEVICE" ]] || { echo "The data disk did not appear"; exit 1; }
+# It is formatted only the first time: a disk that already has a filesystem keeps its data.
+blkid "$DEVICE" > /dev/null || mkfs -t ext4 "$DEVICE"
+install -d /mnt/postgres
+UUID=$(blkid -s UUID -o value "$DEVICE")
+grep -q "$UUID" /etc/fstab || echo "UUID=$UUID /mnt/postgres ext4 defaults,nofail 0 2" >> /etc/fstab
+mount -a
+
+echo "== Files of the application"
+install -d /opt/verifactu/db/init
+echo "${compose_b64}" | base64 -d > /opt/verifactu/compose.yaml
+echo "${init_sql_b64}" | base64 -d > /opt/verifactu/db/init/01-schemas.sql
+
+echo "== Configuration"
+# The permission to read the password may take a few seconds to reach the instance.
+PASSWORD=""
+for attempt in $(seq 1 12); do
+  PASSWORD=$(aws ssm get-parameter --name "${password_parameter}" --with-decryption \
+    --query Parameter.Value --output text --region "${aws_region}") && break
+  sleep 10
+done
+[[ -n "$PASSWORD" ]] || { echo "The password could not be read"; exit 1; }
+umask 077
+cat > /opt/verifactu/.env <<ENV
+POSTGRES_USER=${db_user}
+POSTGRES_PASSWORD=$PASSWORD
+POSTGRES_DB=${db_name}
+IMAGE_REGISTRY=${image_registry}
+IMAGE_TAG=${image_tag}
+ENV
+
+echo "== Start"
+cd /opt/verifactu
+docker compose up -d
+docker compose ps
+echo "== Done"
