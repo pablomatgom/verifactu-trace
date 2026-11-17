@@ -1,0 +1,38 @@
+﻿# 2026-11-17T21:57:22 | terraform plan
+module.compute.data.aws_ssm_parameter.al2023: Reading...
+module.network.data.aws_availability_zones.available: Reading...
+module.compute.data.aws_iam_policy_document.assume_role: Reading...
+data.aws_caller_identity.current: Reading...
+module.network.aws_vpc.main: Refreshing state... [id=vpc-0048ca410df2744c2]
+module.compute.aws_ssm_parameter.db_password: Refreshing state... [id=/verifactu-trace/db-password]
+module.compute.data.aws_iam_policy_document.assume_role: Read complete after 0s [id=2851119427]
+module.compute.aws_iam_role.app: Refreshing state... [id=verifactu-trace-app]
+data.aws_caller_identity.current: Read complete after 0s [id=529470780070]
+module.compute.data.aws_ssm_parameter.al2023: Read complete after 0s [id=/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64]
+module.network.data.aws_availability_zones.available: Read complete after 0s [id=eu-north-1]
+module.storage.aws_ebs_volume.postgres_data: Refreshing state... [id=vol-0fcff82b08ea2815c]
+module.compute.data.aws_iam_policy_document.read_password: Reading...
+module.compute.data.aws_iam_policy_document.read_password: Read complete after 0s [id=3441058863]
+module.compute.aws_iam_role_policy_attachment.ssm_core: Refreshing state... [id=verifactu-trace-app/arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore]
+module.compute.aws_iam_role_policy.read_password: Refreshing state... [id=verifactu-trace-app:read-db-password]
+module.compute.aws_iam_instance_profile.app: Refreshing state... [id=verifactu-trace-app]
+module.network.aws_internet_gateway.main: Refreshing state... [id=igw-08434054e97af5656]
+module.network.aws_route_table.private: Refreshing state... [id=rtb-03a21364990bbb441]
+module.network.aws_default_security_group.default: Refreshing state... [id=sg-0db38708573c12e41]
+module.network.aws_subnet.public: Refreshing state... [id=subnet-0c153825925ddbd33]
+module.network.aws_subnet.private: Refreshing state... [id=subnet-0fe9ddaa4caee7554]
+module.network.aws_security_group.compute: Refreshing state... [id=sg-0eccc796296662efe]
+module.network.aws_route_table.public: Refreshing state... [id=rtb-04c5c9b670512b74f]
+module.network.aws_vpc_security_group_egress_rule.compute_all: Refreshing state... [id=sgr-0c7adc87a56c34c7e]
+module.network.aws_vpc_security_group_ingress_rule.app["8003-0.0.0.0/0"]: Refreshing state... [id=sgr-0a5150cc95d2b5d48]
+module.network.aws_vpc_security_group_ingress_rule.app["8002-0.0.0.0/0"]: Refreshing state... [id=sgr-0db46b4a35fd82079]
+module.network.aws_vpc_security_group_ingress_rule.app["8001-0.0.0.0/0"]: Refreshing state... [id=sgr-08b5c8c68fcb53899]
+module.compute.aws_instance.app: Refreshing state... [id=i-0363ebf83e73259f7]
+module.network.aws_route_table_association.private: Refreshing state... [id=rtbassoc-0cdb24c7d22df8a13]
+module.network.aws_route_table_association.public: Refreshing state... [id=rtbassoc-0c931344bd48d93a3]
+module.compute.aws_volume_attachment.postgres_data: Refreshing state... [id=vai-4028365416]
+
+No changes. Your infrastructure matches the configuration.
+
+Terraform has compared your real infrastructure against your configuration
+and found no differences, so no changes are needed.

@@ -1,0 +1,20 @@
+﻿# 2026-11-17T22:06:06 | comprobación de que no queda nada del proyecto, después del destroy
+### Instancias (las terminadas se siguen listando una hora, pero no cuestan)
+[
+    {
+        "id": "i-0363ebf83e73259f7",
+        "estado": "terminated"
+    }
+]
+### Volúmenes
+[]
+### Redes (VPC)
+[]
+### Grupos de seguridad
+[]
+### Rol de IAM
+
+aws: [ERROR]: An error occurred (NoSuchEntity) when calling the GetRole operation: The role with name verifactu-trace-app cannot be found.
+### Parámetro de Parameter Store
+
+aws: [ERROR]: An error occurred (ParameterNotFound) when calling the GetParameter operation:

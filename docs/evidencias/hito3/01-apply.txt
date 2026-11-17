@@ -1,0 +1,623 @@
+﻿# 2026-11-17T21:42:20 | terraform apply
+module.compute.data.aws_iam_policy_document.assume_role: Reading...
+module.compute.data.aws_ssm_parameter.al2023: Reading...
+module.network.data.aws_availability_zones.available: Reading...
+data.aws_caller_identity.current: Reading...
+module.compute.data.aws_iam_policy_document.assume_role: Read complete after 0s [id=2851119427]
+data.aws_caller_identity.current: Read complete after 0s [id=529470780070]
+module.compute.data.aws_ssm_parameter.al2023: Read complete after 0s [id=/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64]
+module.network.data.aws_availability_zones.available: Read complete after 0s [id=eu-north-1]
+
+Terraform used the selected providers to generate the following execution
+plan. Resource actions are indicated with the following symbols:
+  + create
+ <= read (data resources)
+
+Terraform will perform the following actions:
+
+  # module.compute.data.aws_iam_policy_document.read_password will be read during apply
+  # (config refers to values not yet known)
+ <= data "aws_iam_policy_document" "read_password" {
+      + id            = (known after apply)
+      + json          = (known after apply)
+      + minified_json = (known after apply)
+
+      + statement {
+          + actions   = [
+              + "ssm:GetParameter",
+            ]
+          + resources = [
+              + (known after apply),
+            ]
+        }
+    }
+
+  # module.compute.aws_iam_instance_profile.app will be created
+  + resource "aws_iam_instance_profile" "app" {
+      + arn         = (known after apply)
+      + create_date = (known after apply)
+      + id          = (known after apply)
+      + name        = "verifactu-trace-app"
+      + name_prefix = (known after apply)
+      + path        = "/"
+      + role        = "verifactu-trace-app"
+      + tags_all    = {
+          + "ManagedBy" = "terraform"
+          + "Project"   = "verifactu-trace"
+        }
+      + unique_id   = (known after apply)
+    }
+
+  # module.compute.aws_iam_role.app will be created
+  + resource "aws_iam_role" "app" {
+      + arn                   = (known after apply)
+      + assume_role_policy    = jsonencode(
+            {
+              + Statement = [
+                  + {
+                      + Action    = "sts:AssumeRole"
+                      + Effect    = "Allow"
+                      + Principal = {
+                          + Service = "ec2.amazonaws.com"
+                        }
+                    },
+                ]
+              + Version   = "2012-10-17"
+            }
+        )
+      + create_date           = (known after apply)
+      + force_detach_policies = false
+      + id                    = (known after apply)
+      + managed_policy_arns   = (known after apply)
+      + max_session_duration  = 3600
+      + name                  = "verifactu-trace-app"
+      + name_prefix           = (known after apply)
+      + path                  = "/"
+      + tags_all              = {
+          + "ManagedBy" = "terraform"
+          + "Project"   = "verifactu-trace"
+        }
+      + unique_id             = (known after apply)
+
+      + inline_policy (known after apply)
+    }
+
+  # module.compute.aws_iam_role_policy.read_password will be created
+  + resource "aws_iam_role_policy" "read_password" {
+      + id          = (known after apply)
+      + name        = "read-db-password"
+      + name_prefix = (known after apply)
+      + policy      = (known after apply)
+      + role        = (known after apply)
+    }
+
+  # module.compute.aws_iam_role_policy_attachment.ssm_core will be created
+  + resource "aws_iam_role_policy_attachment" "ssm_core" {
+      + id         = (known after apply)
+      + policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+      + role       = "verifactu-trace-app"
+    }
+
+  # module.compute.aws_instance.app will be created
+  + resource "aws_instance" "app" {
+      + ami                                  = "ami-0f71b90bee7050a75"
+      + arn                                  = (known after apply)
+      + associate_public_ip_address          = true
+      + availability_zone                    = (known after apply)
+      + disable_api_stop                     = (known after apply)
+      + disable_api_termination              = (known after apply)
+      + ebs_optimized                        = (known after apply)
+      + enable_primary_ipv6                  = (known after apply)
+      + force_destroy                        = false
+      + get_password_data                    = false
+      + host_id                              = (known after apply)
+      + host_resource_group_arn              = (known after apply)
+      + iam_instance_profile                 = "verifactu-trace-app"
+      + id                                   = (known after apply)
+      + instance_initiated_shutdown_behavior = (known after apply)
+      + instance_lifecycle                   = (known after apply)
+      + instance_state                       = (known after apply)
+      + instance_type                        = "t3.small"
+      + ipv6_address_count                   = (known after apply)
+      + ipv6_addresses                       = (known after apply)
+      + key_name                             = (known after apply)
+      + monitoring                           = (known after apply)
+      + outpost_arn                          = (known after apply)
+      + password_data                        = (known after apply)
+      + placement_group                      = (known after apply)
+      + placement_group_id                   = (known after apply)
+      + placement_partition_number           = (known after apply)
+      + primary_network_interface_id         = (known after apply)
+      + private_dns                          = (known after apply)
+      + private_ip                           = (known after apply)
+      + public_dns                           = (known after apply)
+      + public_ip                            = (known after apply)
+      + region                               = "eu-north-1"
+      + secondary_private_ips                = (known after apply)
+      + security_groups                      = (known after apply)
+      + source_dest_check                    = true
+      + spot_instance_request_id             = (known after apply)
+      + subnet_id                            = (known after apply)
+      + tags                                 = {
+          + "Name" = "verifactu-trace-app"
+        }
+      + tags_all                             = {
+          + "ManagedBy" = "terraform"
+          + "Name"      = "verifactu-trace-app"
+          + "Project"   = "verifactu-trace"
+        }
+      + tenancy                              = (known after apply)
+      + user_data                            = (known after apply)
+      + user_data_base64                     = (known after apply)
+      + user_data_replace_on_change          = true
+      + vpc_security_group_ids               = (known after apply)
+
+      + capacity_reservation_specification (known after apply)
+
+      + cpu_options (known after apply)
+
+      + ebs_block_device (known after apply)
+
+      + enclave_options (known after apply)
+
+      + ephemeral_block_device (known after apply)
+
+      + instance_market_options (known after apply)
+
+      + maintenance_options (known after apply)
+
+      + metadata_options {
+          + http_endpoint               = "enabled"
+          + http_protocol_ipv6          = "disabled"
+          + http_put_response_hop_limit = (known after apply)
+          + http_tokens                 = "required"
+          + instance_metadata_tags      = (known after apply)
+        }
+
+      + network_interface (known after apply)
+
+      + primary_network_interface (known after apply)
+
+      + private_dns_name_options (known after apply)
+
+      + root_block_device {
+          + delete_on_termination = true
+          + device_name           = (known after apply)
+          + encrypted             = true
+          + iops                  = (known after apply)
+          + kms_key_id            = (known after apply)
+          + tags_all              = (known after apply)
+          + throughput            = (known after apply)
+          + volume_id             = (known after apply)
+          + volume_size           = 20
+          + volume_type           = "gp3"
+        }
+
+      + secondary_network_interface (known after apply)
+    }
+
+  # module.compute.aws_ssm_parameter.db_password will be created
+  + resource "aws_ssm_parameter" "db_password" {
+      + arn            = (known after apply)
+      + data_type      = (known after apply)
+      + has_value_wo   = (known after apply)
+      + id             = (known after apply)
+      + insecure_value = (known after apply)
+      + key_id         = (known after apply)
+      + name           = "/verifactu-trace/db-password"
+      + region         = "eu-north-1"
+      + tags_all       = {
+          + "ManagedBy" = "terraform"
+          + "Project"   = "verifactu-trace"
+        }
+      + tier           = (known after apply)
+      + type           = "SecureString"
+      + value          = (sensitive value)
+      + value_wo       = (write-only attribute)
+      + version        = (known after apply)
+    }
+
+  # module.compute.aws_volume_attachment.postgres_data will be created
+  + resource "aws_volume_attachment" "postgres_data" {
+      + device_name                    = "/dev/sdf"
+      + id                             = (known after apply)
+      + instance_id                    = (known after apply)
+      + region                         = "eu-north-1"
+      + stop_instance_before_detaching = true
+      + volume_id                      = (known after apply)
+    }
+
+  # module.network.aws_default_security_group.default will be created
+  + resource "aws_default_security_group" "default" {
+      + arn                    = (known after apply)
+      + description            = (known after apply)
+      + egress                 = (known after apply)
+      + id                     = (known after apply)
+      + ingress                = (known after apply)
+      + name                   = (known after apply)
+      + name_prefix            = (known after apply)
+      + owner_id               = (known after apply)
+      + region                 = "eu-north-1"
+      + revoke_rules_on_delete = false
+      + tags                   = {
+          + "Name" = "verifactu-trace-default-unused"
+        }
+      + tags_all               = {
+          + "ManagedBy" = "terraform"
+          + "Name"      = "verifactu-trace-default-unused"
+          + "Project"   = "verifactu-trace"
+        }
+      + vpc_id                 = (known after apply)
+    }
+
+  # module.network.aws_internet_gateway.main will be created
+  + resource "aws_internet_gateway" "main" {
+      + arn      = (known after apply)
+      + id       = (known after apply)
+      + owner_id = (known after apply)
+      + region   = "eu-north-1"
+      + tags     = {
+          + "Name" = "verifactu-trace-igw"
+        }
+      + tags_all = {
+          + "ManagedBy" = "terraform"
+          + "Name"      = "verifactu-trace-igw"
+          + "Project"   = "verifactu-trace"
+        }
+      + vpc_id   = (known after apply)
+    }
+
+  # module.network.aws_route_table.private will be created
+  + resource "aws_route_table" "private" {
+      + arn              = (known after apply)
+      + id               = (known after apply)
+      + owner_id         = (known after apply)
+      + propagating_vgws = (known after apply)
+      + region           = "eu-north-1"
+      + route            = (known after apply)
+      + tags             = {
+          + "Name" = "verifactu-trace-private"
+        }
+      + tags_all         = {
+          + "ManagedBy" = "terraform"
+          + "Name"      = "verifactu-trace-private"
+          + "Project"   = "verifactu-trace"
+        }
+      + vpc_id           = (known after apply)
+    }
+
+  # module.network.aws_route_table.public will be created
+  + resource "aws_route_table" "public" {
+      + arn              = (known after apply)
+      + id               = (known after apply)
+      + owner_id         = (known after apply)
+      + propagating_vgws = (known after apply)
+      + region           = "eu-north-1"
+      + route            = [
+          + {
+              + cidr_block                 = "0.0.0.0/0"
+              + gateway_id                 = (known after apply)
+                # (12 unchanged attributes hidden)
+            },
+        ]
+      + tags             = {
+          + "Name" = "verifactu-trace-public"
+        }
+      + tags_all         = {
+          + "ManagedBy" = "terraform"
+          + "Name"      = "verifactu-trace-public"
+          + "Project"   = "verifactu-trace"
+        }
+      + vpc_id           = (known after apply)
+    }
+
+  # module.network.aws_route_table_association.private will be created
+  + resource "aws_route_table_association" "private" {
+      + id             = (known after apply)
+      + region         = "eu-north-1"
+      + route_table_id = (known after apply)
+      + subnet_id      = (known after apply)
+    }
+
+  # module.network.aws_route_table_association.public will be created
+  + resource "aws_route_table_association" "public" {
+      + id             = (known after apply)
+      + region         = "eu-north-1"
+      + route_table_id = (known after apply)
+      + subnet_id      = (known after apply)
+    }
+
+  # module.network.aws_security_group.compute will be created
+  + resource "aws_security_group" "compute" {
+      + arn                    = (known after apply)
+      + description            = "Compute instance: the ports of the application"
+      + egress                 = (known after apply)
+      + id                     = (known after apply)
+      + ingress                = (known after apply)
+      + name                   = "verifactu-trace-compute"
+      + name_prefix            = (known after apply)
+      + owner_id               = (known after apply)
+      + region                 = "eu-north-1"
+      + revoke_rules_on_delete = false
+      + tags                   = {
+          + "Name" = "verifactu-trace-compute"
+        }
+      + tags_all               = {
+          + "ManagedBy" = "terraform"
+          + "Name"      = "verifactu-trace-compute"
+          + "Project"   = "verifactu-trace"
+        }
+      + vpc_id                 = (known after apply)
+    }
+
+  # module.network.aws_subnet.private will be created
+  + resource "aws_subnet" "private" {
+      + arn                                            = (known after apply)
+      + assign_ipv6_address_on_creation                = false
+      + availability_zone                              = "eu-north-1a"
+      + availability_zone_id                           = (known after apply)
+      + cidr_block                                     = "10.0.2.0/24"
+      + enable_dns64                                   = false
+      + enable_resource_name_dns_a_record_on_launch    = false
+      + enable_resource_name_dns_aaaa_record_on_launch = false
+      + id                                             = (known after apply)
+      + ipv6_cidr_block                                = (known after apply)
+      + ipv6_cidr_block_association_id                 = (known after apply)
+      + ipv6_native                                    = false
+      + map_public_ip_on_launch                        = false
+      + owner_id                                       = (known after apply)
+      + private_dns_hostname_type_on_launch            = (known after apply)
+      + region                                         = "eu-north-1"
+      + tags                                           = {
+          + "Name" = "verifactu-trace-private"
+        }
+      + tags_all                                       = {
+          + "ManagedBy" = "terraform"
+          + "Name"      = "verifactu-trace-private"
+          + "Project"   = "verifactu-trace"
+        }
+      + vpc_id                                         = (known after apply)
+    }
+
+  # module.network.aws_subnet.public will be created
+  + resource "aws_subnet" "public" {
+      + arn                                            = (known after apply)
+      + assign_ipv6_address_on_creation                = false
+      + availability_zone                              = "eu-north-1a"
+      + availability_zone_id                           = (known after apply)
+      + cidr_block                                     = "10.0.1.0/24"
+      + enable_dns64                                   = false
+      + enable_resource_name_dns_a_record_on_launch    = false
+      + enable_resource_name_dns_aaaa_record_on_launch = false
+      + id                                             = (known after apply)
+      + ipv6_cidr_block                                = (known after apply)
+      + ipv6_cidr_block_association_id                 = (known after apply)
+      + ipv6_native                                    = false
+      + map_public_ip_on_launch                        = false
+      + owner_id                                       = (known after apply)
+      + private_dns_hostname_type_on_launch            = (known after apply)
+      + region                                         = "eu-north-1"
+      + tags                                           = {
+          + "Name" = "verifactu-trace-public"
+        }
+      + tags_all                                       = {
+          + "ManagedBy" = "terraform"
+          + "Name"      = "verifactu-trace-public"
+          + "Project"   = "verifactu-trace"
+        }
+      + vpc_id                                         = (known after apply)
+    }
+
+  # module.network.aws_vpc.main will be created
+  + resource "aws_vpc" "main" {
+      + arn                                  = (known after apply)
+      + cidr_block                           = "10.0.0.0/16"
+      + default_network_acl_id               = (known after apply)
+      + default_route_table_id               = (known after apply)
+      + default_security_group_id            = (known after apply)
+      + dhcp_options_id                      = (known after apply)
+      + enable_dns_hostnames                 = true
+      + enable_dns_support                   = true
+      + enable_network_address_usage_metrics = (known after apply)
+      + id                                   = (known after apply)
+      + instance_tenancy                     = "default"
+      + ipv6_association_id                  = (known after apply)
+      + ipv6_cidr_block                      = (known after apply)
+      + ipv6_cidr_block_network_border_group = (known after apply)
+      + main_route_table_id                  = (known after apply)
+      + owner_id                             = (known after apply)
+      + region                               = "eu-north-1"
+      + tags                                 = {
+          + "Name" = "verifactu-trace-vpc"
+        }
+      + tags_all                             = {
+          + "ManagedBy" = "terraform"
+          + "Name"      = "verifactu-trace-vpc"
+          + "Project"   = "verifactu-trace"
+        }
+    }
+
+  # module.network.aws_vpc_security_group_egress_rule.compute_all will be created
+  + resource "aws_vpc_security_group_egress_rule" "compute_all" {
+      + arn                    = (known after apply)
+      + cidr_ipv4              = "0.0.0.0/0"
+      + description            = "All the outgoing traffic"
+      + id                     = (known after apply)
+      + ip_protocol            = "-1"
+      + region                 = "eu-north-1"
+      + security_group_id      = (known after apply)
+      + security_group_rule_id = (known after apply)
+      + tags_all               = {
+          + "ManagedBy" = "terraform"
+          + "Project"   = "verifactu-trace"
+        }
+    }
+
+  # module.network.aws_vpc_security_group_ingress_rule.app["8001-0.0.0.0/0"] will be created
+  + resource "aws_vpc_security_group_ingress_rule" "app" {
+      + arn                    = (known after apply)
+      + cidr_ipv4              = "0.0.0.0/0"
+      + description            = "Application port 8001"
+      + from_port              = 8001
+      + id                     = (known after apply)
+      + ip_protocol            = "tcp"
+      + region                 = "eu-north-1"
+      + security_group_id      = (known after apply)
+      + security_group_rule_id = (known after apply)
+      + tags_all               = {
+          + "ManagedBy" = "terraform"
+          + "Project"   = "verifactu-trace"
+        }
+      + to_port                = 8001
+    }
+
+  # module.network.aws_vpc_security_group_ingress_rule.app["8002-0.0.0.0/0"] will be created
+  + resource "aws_vpc_security_group_ingress_rule" "app" {
+      + arn                    = (known after apply)
+      + cidr_ipv4              = "0.0.0.0/0"
+      + description            = "Application port 8002"
+      + from_port              = 8002
+      + id                     = (known after apply)
+      + ip_protocol            = "tcp"
+      + region                 = "eu-north-1"
+      + security_group_id      = (known after apply)
+      + security_group_rule_id = (known after apply)
+      + tags_all               = {
+          + "ManagedBy" = "terraform"
+          + "Project"   = "verifactu-trace"
+        }
+      + to_port                = 8002
+    }
+
+  # module.network.aws_vpc_security_group_ingress_rule.app["8003-0.0.0.0/0"] will be created
+  + resource "aws_vpc_security_group_ingress_rule" "app" {
+      + arn                    = (known after apply)
+      + cidr_ipv4              = "0.0.0.0/0"
+      + description            = "Application port 8003"
+      + from_port              = 8003
+      + id                     = (known after apply)
+      + ip_protocol            = "tcp"
+      + region                 = "eu-north-1"
+      + security_group_id      = (known after apply)
+      + security_group_rule_id = (known after apply)
+      + tags_all               = {
+          + "ManagedBy" = "terraform"
+          + "Project"   = "verifactu-trace"
+        }
+      + to_port                = 8003
+    }
+
+  # module.storage.aws_ebs_volume.postgres_data will be created
+  + resource "aws_ebs_volume" "postgres_data" {
+      + arn               = (known after apply)
+      + availability_zone = "eu-north-1a"
+      + create_time       = (known after apply)
+      + encrypted         = true
+      + final_snapshot    = false
+      + id                = (known after apply)
+      + iops              = (known after apply)
+      + kms_key_id        = (known after apply)
+      + region            = "eu-north-1"
+      + size              = 10
+      + snapshot_id       = (known after apply)
+      + tags              = {
+          + "Name" = "verifactu-trace-postgres-data"
+        }
+      + tags_all          = {
+          + "ManagedBy" = "terraform"
+          + "Name"      = "verifactu-trace-postgres-data"
+          + "Project"   = "verifactu-trace"
+        }
+      + throughput        = (known after apply)
+      + type              = "gp3"
+    }
+
+Plan: 22 to add, 0 to change, 0 to destroy.
+
+Changes to Outputs:
+  + account_id                = "529470780070"
+  + availability_zone         = "eu-north-1a"
+  + compute_security_group_id = (known after apply)
+  + data_volume_id            = (known after apply)
+  + health_urls               = [
+      + (known after apply),
+      + (known after apply),
+      + (known after apply),
+    ]
+  + instance_id               = (known after apply)
+  + private_subnet_id         = (known after apply)
+  + public_ip                 = (known after apply)
+  + public_subnet_id          = (known after apply)
+  + region                    = "eu-north-1"
+  + vpc_id                    = (known after apply)
+module.storage.aws_ebs_volume.postgres_data: Creating...
+module.compute.aws_ssm_parameter.db_password: Creating...
+module.compute.aws_iam_role.app: Creating...
+module.network.aws_vpc.main: Creating...
+module.compute.aws_ssm_parameter.db_password: Creation complete after 1s [id=/verifactu-trace/db-password]
+module.compute.data.aws_iam_policy_document.read_password: Reading...
+module.compute.data.aws_iam_policy_document.read_password: Read complete after 0s [id=3441058863]
+module.compute.aws_iam_role.app: Creation complete after 1s [id=verifactu-trace-app]
+module.compute.aws_iam_role_policy_attachment.ssm_core: Creating...
+module.compute.aws_iam_role_policy.read_password: Creating...
+module.compute.aws_iam_instance_profile.app: Creating...
+module.compute.aws_iam_role_policy_attachment.ssm_core: Creation complete after 1s [id=verifactu-trace-app/arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore]
+module.compute.aws_iam_role_policy.read_password: Creation complete after 1s [id=verifactu-trace-app:read-db-password]
+module.network.aws_vpc.main: Creation complete after 3s [id=vpc-0048ca410df2744c2]
+module.network.aws_internet_gateway.main: Creating...
+module.network.aws_subnet.private: Creating...
+module.network.aws_subnet.public: Creating...
+module.network.aws_security_group.compute: Creating...
+module.network.aws_route_table.private: Creating...
+module.network.aws_default_security_group.default: Creating...
+module.network.aws_internet_gateway.main: Creation complete after 1s [id=igw-08434054e97af5656]
+module.network.aws_route_table.public: Creating...
+module.network.aws_subnet.private: Creation complete after 1s [id=subnet-0fe9ddaa4caee7554]
+module.network.aws_route_table.private: Creation complete after 1s [id=rtb-03a21364990bbb441]
+module.network.aws_route_table_association.private: Creating...
+module.network.aws_subnet.public: Creation complete after 1s [id=subnet-0c153825925ddbd33]
+module.network.aws_route_table_association.private: Creation complete after 0s [id=rtbassoc-0cdb24c7d22df8a13]
+module.network.aws_route_table.public: Creation complete after 1s [id=rtb-04c5c9b670512b74f]
+module.network.aws_route_table_association.public: Creating...
+module.network.aws_security_group.compute: Creation complete after 2s [id=sg-0eccc796296662efe]
+module.network.aws_vpc_security_group_egress_rule.compute_all: Creating...
+module.network.aws_vpc_security_group_ingress_rule.app["8003-0.0.0.0/0"]: Creating...
+module.network.aws_vpc_security_group_ingress_rule.app["8001-0.0.0.0/0"]: Creating...
+module.network.aws_vpc_security_group_ingress_rule.app["8002-0.0.0.0/0"]: Creating...
+module.network.aws_default_security_group.default: Creation complete after 2s [id=sg-0db38708573c12e41]
+module.network.aws_vpc_security_group_ingress_rule.app["8002-0.0.0.0/0"]: Creation complete after 1s [id=sgr-0dd3471f3c1c8d17f]
+module.network.aws_route_table_association.public: Creation complete after 1s [id=rtbassoc-0c931344bd48d93a3]
+module.network.aws_vpc_security_group_ingress_rule.app["8003-0.0.0.0/0"]: Creation complete after 1s [id=sgr-0a5150cc95d2b5d48]
+module.network.aws_vpc_security_group_ingress_rule.app["8001-0.0.0.0/0"]: Creation complete after 1s [id=sgr-08b5c8c68fcb53899]
+module.network.aws_vpc_security_group_egress_rule.compute_all: Creation complete after 1s [id=sgr-0c7adc87a56c34c7e]
+module.compute.aws_iam_instance_profile.app: Creation complete after 7s [id=verifactu-trace-app]
+module.storage.aws_ebs_volume.postgres_data: Still creating... [00m10s elapsed]
+module.storage.aws_ebs_volume.postgres_data: Creation complete after 11s [id=vol-0fcff82b08ea2815c]
+module.compute.aws_instance.app: Creating...
+module.compute.aws_instance.app: Still creating... [00m10s elapsed]
+module.compute.aws_instance.app: Still creating... [00m20s elapsed]
+module.compute.aws_instance.app: Creation complete after 21s [id=i-0363ebf83e73259f7]
+module.compute.aws_volume_attachment.postgres_data: Creating...
+module.compute.aws_volume_attachment.postgres_data: Still creating... [00m10s elapsed]
+module.compute.aws_volume_attachment.postgres_data: Still creating... [00m20s elapsed]
+module.compute.aws_volume_attachment.postgres_data: Creation complete after 22s [id=vai-4028365416]
+
+Apply complete! Resources: 22 added, 0 changed, 0 destroyed.
+
+Outputs:
+
+account_id = "529470780070"
+availability_zone = "eu-north-1a"
+compute_security_group_id = "sg-0eccc796296662efe"
+data_volume_id = "vol-0fcff82b08ea2815c"
+health_urls = [
+  "http://13.49.224.245:8001/health",
+  "http://13.49.224.245:8002/health",
+  "http://13.49.224.245:8003/health",
+]
+instance_id = "i-0363ebf83e73259f7"
+private_subnet_id = "subnet-0fe9ddaa4caee7554"
+public_ip = "13.49.224.245"
+public_subnet_id = "subnet-0c153825925ddbd33"
+region = "eu-north-1"
+vpc_id = "vpc-0048ca410df2744c2"

@@ -16,9 +16,10 @@ Aplicación nativa de la nube para la emisión y la trazabilidad de facturación
 5. [Especificación de la API REST](#especificación-de-la-api-rest)
 6. [Desarrollo local](#desarrollo-local)
 7. [Integración continua](#integración-continua)
-8. [Documentación](#documentación)
-9. [Gestión del proyecto](#gestión-del-proyecto)
-10. [Licencia](#licencia)
+8. [Infraestructura en AWS](#infraestructura-en-aws)
+9. [Documentación](#documentación)
+10. [Gestión del proyecto](#gestión-del-proyecto)
+11. [Licencia](#licencia)
 
 ## Descripción del dominio y casos de uso
 
@@ -1032,21 +1033,48 @@ make up                                                                # integra
 
 El detalle de los workflows, los permisos y las decisiones de diseño está en [`docs/ci.md`](docs/ci.md).
 
+## Infraestructura en AWS
+
+La infraestructura se define con Terraform en [`infra/`](infra/), en tres módulos: la red (VPC, subredes y grupo de seguridad), el almacenamiento (un disco de EBS para los datos de PostgreSQL) y el cómputo (una instancia de EC2 que arranca los cinco contenedores con las imágenes de GHCR). Se crea en la región `eu-north-1` (Estocolmo). Los diagramas están en [`docs/despliegue.md`](docs/despliegue.md), la estructura del código en [`docs/terraform.md`](docs/terraform.md) y las decisiones en [`docs/hito3.md`](docs/hito3.md).
+
+### Verificación del patrón Reconciler
+
+El patrón *Reconciler* consiste en comparar de forma continua el estado deseado con el real y corregir la diferencia. Terraform lo hace cada vez que se ejecuta: el código es el estado deseado, el estado guardado en S3 es lo que recuerda haber creado, y en cada `plan` consulta a AWS cómo está ahora la infraestructura. El experimento lo comprueba en cuatro fases, con una modificación manual: borrar en la consola de AWS la regla del puerto 8002 del grupo de seguridad `verifactu-trace-compute`.
+
+| Fase | Qué se hace | Qué se observa | Evidencia |
+|---|---|---|---|
+| **1. Estado deseado** | `terraform apply` | Se crean los 22 recursos | `01-apply.txt`, `02-consola-antes.pdf` |
+| **2. Deriva** | Se borra a mano la regla del puerto 8002 en la consola | El servicio del puerto 8002 deja de responder desde fuera; los otros dos siguen igual | `03-consola-cambio.pdf`, `04-health-roto.txt` |
+| **3. Observación** | `terraform plan` | Terraform avisa de que la regla ya no existe en AWS y propone crearla (`1 to add`) | `05-plan-deriva.txt` |
+| **4. Reconciliación** | `terraform apply` | Se crea de nuevo la regla, el puerto 8002 vuelve a responder y un nuevo `plan` no propone cambios | `06-apply-reconcilia.txt`, `07-plan-limpio.txt` |
+
+Los ficheros de evidencia están en [`docs/evidencias/hito3/`](docs/evidencias/hito3/README.md).
+
+#### Apagado
+
+Al terminar, `terraform destroy` elimina los 22 recursos (`08-destroy.txt`). Para comprobar que no queda nada que genere costes, se consulta a EC2 por la etiqueta `Project=verifactu-trace` (todos los recursos la llevan): la única instancia que figura está terminada y no queda ningún volumen, VPC ni grupo de seguridad. También se confirma que el rol de IAM y el parámetro de Parameter Store ya no existen (`09-sin-recursos.txt`) y se revisa la consola de AWS (`10-consola-ec2-vacia.pdf` y `10-consola-vpc-vacia.pdf`).
+
 ## Documentación
 
-Documentación adicional del proyecto, en la carpeta [`docs/`](docs/):
+Documentación adicional del proyecto, en la carpeta [`docs/`](docs/). Hay dos tipos de documentos: los **temáticos**, que explican cómo funciona una parte del sistema y se actualizan en varios hitos, y los **de cada hito**, que recogen sus decisiones y sus evidencias.
 
-- [Empaquetado con Docker](docs/docker.md): estructura de los Dockerfiles y decisiones de diseño de las imágenes.
-- [Entorno local con Docker Compose](docs/compose.md): puesta en marcha del sistema completo, redes, volúmenes y decisiones de diseño.
+### Por tema
+
 - [Arquitectura interna de los servicios](docs/arquitectura.md): arquitectura en capas (api, services, repositories), su equivalencia con controller/service/repository y reglas.
 - [Capa de datos y migraciones](docs/database.md): estructura por capas de los servicios, migraciones con Alembic y tests con PostgreSQL.
+- [Empaquetado con Docker](docs/docker.md): estructura de los Dockerfiles y decisiones de diseño de las imágenes.
+- [Entorno local con Docker Compose](docs/compose.md): puesta en marcha del sistema completo, redes, volúmenes y decisiones de diseño.
 - [Integración continua](docs/ci.md): lint, tests, validación de Terraform, análisis de Dockerfiles y publicación de imágenes en GHCR.
 - [Infraestructura con Terraform](docs/terraform.md): qué es Terraform y cómo funciona, estructura de `infra/`, estado remoto en S3 con bloqueo, región de la UE y gestión de las credenciales.
 - [AWS: conceptos y comandos](docs/aws.md): S3, IAM, regiones, redes, EBS, EC2 y Systems Manager, y los comandos de la AWS CLI usados para preparar la cuenta y acceder a la instancia.
-- [Decisiones del Hito 3](docs/hito3.md): elección del proveedor y de la persistencia, con sus alternativas, y las decisiones de las capas de red, almacenamiento y cómputo (en curso).
 - [Arquitectura de despliegue](docs/despliegue.md): diagramas de lo que se despliega en AWS, de los contenedores de la instancia y del primer arranque.
-- [Decisiones del Hito 2](docs/hito2.md): justificación del gestor de tareas, la biblioteca de aserciones, el marco de pruebas y el sistema de CI, y qué lógica de negocio se prueba.
-- [Evidencias del Hito 2](docs/evidencias/README.md): salida de los comandos y capturas de la CI, GHCR y SonarCloud.
+
+### Por hito
+
+| Hito | Decisiones | Evidencias |
+|---|---|---|
+| **Hito 2**: empaquetado cloud native, entorno local e integración continua | [`docs/hito2.md`](docs/hito2.md): justificación del gestor de tareas, la biblioteca de aserciones, el marco de pruebas y el sistema de CI, y qué lógica de negocio se prueba | [`docs/evidencias/hito2/`](docs/evidencias/hito2/README.md): salida de los comandos y capturas de la CI, GHCR y SonarCloud |
+| **Hito 3**: infraestructura como código en AWS | [`docs/hito3.md`](docs/hito3.md): elección del proveedor y de la persistencia, con sus alternativas, y las decisiones de las capas de red, almacenamiento y cómputo (en curso) | [`docs/evidencias/hito3/`](docs/evidencias/hito3/README.md): salida de los comandos y capturas del experimento del patrón *Reconciler* y del apagado de la infraestructura |
 
 ## Gestión del proyecto
 

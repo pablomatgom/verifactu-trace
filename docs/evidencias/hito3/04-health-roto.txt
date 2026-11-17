@@ -1,0 +1,4 @@
+﻿# 2026-11-17T21:54:44 | curl /health de los tres servicios
+{"status":"ok","service":"document-service"} -> HTTP 200
+ -> HTTP 000
+{"status":"ok","service":"submission-service"} -> HTTP 200

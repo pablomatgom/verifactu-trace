@@ -16,7 +16,7 @@ El enunciado permite una nube pública con capa gratuita o créditos de estudian
 | **Azure para estudiantes** | 100 $ durante un año, renovables | PostgreSQL Flexible Server | No, pero exige verificar el correo académico |
 | **Google Cloud** | 300 $ durante 90 días | Cloud SQL | Sí |
 
-Las cifras son las que publican los proveedores en el momento de la elección y pueden cambiar. **No se ha comprobado cuál es el crédito real de la cuenta usada**, que es un proyecto gestionado (ver más abajo): su saldo y su caducidad se consultan en la consola de AWS, en *Billing and Cost Management*.
+Las cifras son las que publican los proveedores en el momento de la elección y pueden cambiar. El crédito real de la cuenta usada, que es un proyecto gestionado (ver más abajo), es el que muestra el panel de EC2 el 17 de noviembre de 2026: **120 USD restantes, con 172 días hasta su caducidad** (el 8 de mayo de 2027). Se ve en [`10-consola-ec2-vacia.pdf`](evidencias/hito3/10-consola-ec2-vacia.pdf). El saldo se consulta en la consola de AWS, en *Billing and Cost Management*.
 
 ### Por qué AWS
 

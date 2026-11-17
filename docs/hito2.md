@@ -204,7 +204,7 @@ El tag fija lo entregado: el trabajo posterior en `main` no lo modifica. Las evi
 
 ### Evidencias
 
-La salida real de los comandos y las capturas de GitHub y SonarCloud que demuestran lo anterior están en [`evidencias/`](evidencias/README.md).
+La salida real de los comandos y las capturas de GitHub y SonarCloud que demuestran lo anterior están en [`evidencias/hito2/`](evidencias/hito2/README.md).
 
 ## Cómo ejecutar las pruebas
 

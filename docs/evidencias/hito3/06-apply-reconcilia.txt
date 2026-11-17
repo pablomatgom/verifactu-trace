@@ -1,0 +1,91 @@
+﻿# 2026-11-17T21:56:37 | terraform apply
+module.compute.data.aws_ssm_parameter.al2023: Reading...
+module.network.data.aws_availability_zones.available: Reading...
+module.compute.data.aws_iam_policy_document.assume_role: Reading...
+data.aws_caller_identity.current: Reading...
+module.compute.aws_ssm_parameter.db_password: Refreshing state... [id=/verifactu-trace/db-password]
+module.network.aws_vpc.main: Refreshing state... [id=vpc-0048ca410df2744c2]
+module.compute.data.aws_iam_policy_document.assume_role: Read complete after 0s [id=2851119427]
+module.compute.aws_iam_role.app: Refreshing state... [id=verifactu-trace-app]
+data.aws_caller_identity.current: Read complete after 1s [id=529470780070]
+module.network.data.aws_availability_zones.available: Read complete after 1s [id=eu-north-1]
+module.storage.aws_ebs_volume.postgres_data: Refreshing state... [id=vol-0fcff82b08ea2815c]
+module.compute.data.aws_ssm_parameter.al2023: Read complete after 1s [id=/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64]
+module.compute.data.aws_iam_policy_document.read_password: Reading...
+module.compute.data.aws_iam_policy_document.read_password: Read complete after 0s [id=3441058863]
+module.compute.aws_iam_role_policy_attachment.ssm_core: Refreshing state... [id=verifactu-trace-app/arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore]
+module.compute.aws_iam_role_policy.read_password: Refreshing state... [id=verifactu-trace-app:read-db-password]
+module.compute.aws_iam_instance_profile.app: Refreshing state... [id=verifactu-trace-app]
+module.network.aws_internet_gateway.main: Refreshing state... [id=igw-08434054e97af5656]
+module.network.aws_default_security_group.default: Refreshing state... [id=sg-0db38708573c12e41]
+module.network.aws_route_table.private: Refreshing state... [id=rtb-03a21364990bbb441]
+module.network.aws_security_group.compute: Refreshing state... [id=sg-0eccc796296662efe]
+module.network.aws_subnet.public: Refreshing state... [id=subnet-0c153825925ddbd33]
+module.network.aws_subnet.private: Refreshing state... [id=subnet-0fe9ddaa4caee7554]
+module.network.aws_route_table.public: Refreshing state... [id=rtb-04c5c9b670512b74f]
+module.network.aws_vpc_security_group_egress_rule.compute_all: Refreshing state... [id=sgr-0c7adc87a56c34c7e]
+module.network.aws_vpc_security_group_ingress_rule.app["8003-0.0.0.0/0"]: Refreshing state... [id=sgr-0a5150cc95d2b5d48]
+module.network.aws_vpc_security_group_ingress_rule.app["8001-0.0.0.0/0"]: Refreshing state... [id=sgr-08b5c8c68fcb53899]
+module.network.aws_vpc_security_group_ingress_rule.app["8002-0.0.0.0/0"]: Refreshing state... [id=sgr-0dd3471f3c1c8d17f]
+module.network.aws_route_table_association.private: Refreshing state... [id=rtbassoc-0cdb24c7d22df8a13]
+module.network.aws_route_table_association.public: Refreshing state... [id=rtbassoc-0c931344bd48d93a3]
+module.compute.aws_instance.app: Refreshing state... [id=i-0363ebf83e73259f7]
+module.compute.aws_volume_attachment.postgres_data: Refreshing state... [id=vai-4028365416]
+
+Terraform used the selected providers to generate the following execution
+plan. Resource actions are indicated with the following symbols:
+  + create
+
+Terraform will perform the following actions:
+
+  # module.network.aws_vpc_security_group_ingress_rule.app["8002-0.0.0.0/0"] will be created
+  + resource "aws_vpc_security_group_ingress_rule" "app" {
+      + arn                    = (known after apply)
+      + cidr_ipv4              = "0.0.0.0/0"
+      + description            = "Application port 8002"
+      + from_port              = 8002
+      + id                     = (known after apply)
+      + ip_protocol            = "tcp"
+      + region                 = "eu-north-1"
+      + security_group_id      = "sg-0eccc796296662efe"
+      + security_group_rule_id = (known after apply)
+      + tags_all               = {
+          + "ManagedBy" = "terraform"
+          + "Project"   = "verifactu-trace"
+        }
+      + to_port                = 8002
+    }
+
+Plan: 1 to add, 0 to change, 0 to destroy.
+module.network.aws_vpc_security_group_ingress_rule.app["8002-0.0.0.0/0"]: Creating...
+module.network.aws_vpc_security_group_ingress_rule.app["8002-0.0.0.0/0"]: Creation complete after 1s [id=sgr-0db46b4a35fd82079]
+
+Warning: AWS resource not found during refresh
+
+  with module.network.aws_vpc_security_group_ingress_rule.app["8002-0.0.0.0/0"],
+  on modules\network\main.tf line 110, in resource "aws_vpc_security_group_ingress_rule" "app":
+ 110: resource "aws_vpc_security_group_ingress_rule" "app" {
+
+Automatically removing from Terraform State instead of returning the error, which may trigger resource recreation. Original error:
+couldn't find resource
+
+Apply complete! Resources: 1 added, 0 changed, 0 destroyed.
+
+Outputs:
+
+account_id = "529470780070"
+availability_zone = "eu-north-1a"
+compute_security_group_id = "sg-0eccc796296662efe"
+data_volume_id = "vol-0fcff82b08ea2815c"
+health_urls = [
+  "http://13.49.224.245:8001/health",
+  "http://13.49.224.245:8002/health",
+  "http://13.49.224.245:8003/health",
+]
+instance_id = "i-0363ebf83e73259f7"
+private_subnet_id = "subnet-0fe9ddaa4caee7554"
+public_ip = "13.49.224.245"
+public_subnet_id = "subnet-0c153825925ddbd33"
+region = "eu-north-1"
+vpc_id = "vpc-0048ca410df2744c2"
+{"status":"ok","service":"traceability-service"} -> HTTP 200
