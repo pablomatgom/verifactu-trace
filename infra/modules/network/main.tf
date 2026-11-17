@@ -98,7 +98,7 @@ resource "aws_default_security_group" "default" {
 # --- Security group of the compute instance -------------------------------------------------
 
 # PostgreSQL and Redis are containers of the instance and talk to the services inside it, so
-# their ports are not opened here: only the ports of the application are.
+# their ports are not opened here (only the ports of the application are opened).
 resource "aws_security_group" "compute" {
   name        = "${var.project_name}-compute"
   description = "Compute instance: the ports of the application"
@@ -118,18 +118,7 @@ resource "aws_vpc_security_group_ingress_rule" "app" {
   cidr_ipv4         = each.value.cidr
 }
 
-resource "aws_vpc_security_group_ingress_rule" "admin" {
-  for_each = toset(var.admin_cidr_blocks)
-
-  security_group_id = aws_security_group.compute.id
-  description       = "Administration (SSH)"
-  ip_protocol       = "tcp"
-  from_port         = 22
-  to_port           = 22
-  cidr_ipv4         = each.value
-}
-
-# The instance has to go out: to pull the images and to resolve names.
+# The instance is to be able to pull the images and to resolve names.
 resource "aws_vpc_security_group_egress_rule" "compute_all" {
   security_group_id = aws_security_group.compute.id
   description       = "All the outgoing traffic"

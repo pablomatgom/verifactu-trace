@@ -37,3 +37,18 @@ output "data_volume_id" {
   description = "Disk with the data of PostgreSQL."
   value       = module.storage.volume_id
 }
+
+output "instance_id" {
+  description = "Instance that runs the containers. A Systems Manager session is opened with it."
+  value       = module.compute.instance_id
+}
+
+output "public_ip" {
+  description = "Public address of the instance."
+  value       = module.compute.public_ip
+}
+
+output "health_urls" {
+  description = "Where to check that each service responds."
+  value       = [for port in var.app_ports : "http://${module.compute.public_ip}:${port}/health"]
+}

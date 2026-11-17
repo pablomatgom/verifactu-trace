@@ -27,16 +27,22 @@ variable "app_allowed_cidr_blocks" {
   default     = ["0.0.0.0/0"]
 }
 
-variable "admin_cidr_blocks" {
-  description = "Addresses that can reach port 22 (SSH). Empty: no administration port is open."
-  type        = list(string)
-  default     = []
-}
-
 variable "data_volume_size_gb" {
   description = "Size, in GB, of the disk that keeps the data of PostgreSQL."
   type        = number
   default     = 10
+}
+
+variable "instance_type" {
+  description = "Type of the instance that runs the containers. It has to be x86: the images are built for amd64 only."
+  type        = string
+  default     = "t3.small"
+}
+
+variable "image_tag" {
+  description = "Tag of the images of the services to run."
+  type        = string
+  default     = "latest"
 }
 
 # Sensitive and without a default value: it is never written in the code. It is passed with
@@ -46,4 +52,11 @@ variable "db_password" {
   description = "Password of the database administrator."
   type        = string
   sensitive   = true
+
+  # Letters and digits only: the password goes into an .env file, where characters such as
+  # $, # or quotes would be read as something else.
+  validation {
+    condition     = length(var.db_password) >= 12 && can(regex("^[A-Za-z0-9]+$", var.db_password))
+    error_message = "The password needs at least 12 characters, and only letters and digits."
+  }
 }
