@@ -86,13 +86,19 @@ infra/
     │   ├── main.tf
     │   ├── variables.tf
     │   └── outputs.tf
-    └── storage/               # disco de EBS con los datos de PostgreSQL
+    ├── storage/               # disco de EBS con los datos de PostgreSQL
+    │   ├── main.tf
+    │   ├── variables.tf
+    │   └── outputs.tf
+    └── compute/               # instancia, permisos y arranque del sistema
         ├── main.tf
         ├── variables.tf
-        └── outputs.tf
+        ├── outputs.tf
+        ├── files/compose.yaml           # compose.yaml de la nube
+        └── templates/user_data.sh.tftpl # script del primer arranque
 ```
 
-Cada capa es un módulo de `infra/modules/`: la raíz solo los conecta. Las capas de persistencia y cómputo se añaden igual.
+Cada capa es un módulo de `infra/modules/`: la raíz solo los conecta, y cada uno recibe como entradas las salidas de los anteriores (red, almacenamiento y cómputo).
 
 ### Módulo de red
 
@@ -103,7 +109,6 @@ Cada capa es un módulo de `infra/modules/`: la raíz solo los conecta. Las capa
 | `private_subnet_cidr` | `10.0.2.0/24` | Subred privada |
 | `app_ports` | `[8001, 8002, 8003]` | Puertos de la aplicación que se abren |
 | `app_allowed_cidr_blocks` | `["0.0.0.0/0"]` | Desde qué direcciones se llega a esos puertos |
-| `admin_cidr_blocks` | `[]` | Desde qué direcciones se abre el puerto 22. Vacío: cerrado |
 
 Devuelve el identificador de la red, de las dos subredes y del grupo de seguridad del servidor, y la zona de disponibilidad. Las capas siguientes los reciben como entradas. El diseño y las decisiones están en [`aws.md`](aws.md#diseño) y en [`hito3.md`](hito3.md#capa-de-red).
 
@@ -115,6 +120,19 @@ Devuelve el identificador de la red, de las dos subredes y del grupo de segurida
 | `size_gb` | `10` | Tamaño del disco, en GB. En la raíz se cambia con `data_volume_size_gb` |
 
 Crea un único volumen de EBS `gp3`, cifrado, y devuelve su identificador (`volume_id`). No lo conecta a la instancia: eso lo hace la capa de cómputo, que es la que conoce la instancia. Los conceptos están en [`aws.md`](aws.md#almacenamiento-en-bloque-ebs) y las decisiones en [`hito3.md`](hito3.md#capa-de-persistencia).
+
+### Módulo de cómputo
+
+| Variable | Por defecto | Qué controla |
+|---|---|---|
+| `subnet_id`, `security_group_id`, `volume_id` | Ninguno: los pasa la raíz con las salidas de los otros módulos | Dónde se crea la instancia y qué disco usa |
+| `db_password` | Ninguno | Contraseña de la base de datos (sensible) |
+| `instance_type` | `t3.small` | Tipo de instancia. Debe ser x86 |
+| `root_volume_size_gb` | `20` | Disco de la instancia |
+| `db_user`, `db_name` | `verifactu` | Usuario y nombre de la base de datos |
+| `image_registry`, `image_tag` | `ghcr.io/pablomatgom/verifactu-trace`, `latest` | De dónde salen las imágenes y qué versión se ejecuta |
+
+Crea la instancia, su rol de IAM, el parámetro con la contraseña y la conexión del disco. Devuelve `instance_id` y `public_ip`; la raíz añade `health_urls`, las direcciones donde comprobar cada servicio. El detalle del arranque está en [`hito3.md`](hito3.md#capa-de-cómputo).
 
 ## Proveedor y región
 
@@ -178,7 +196,7 @@ terraform apply
 - `terraform apply` lo aplica, tras pedir confirmación.
 - `terraform destroy` borra todo lo que Terraform gestiona. Conviene ejecutarlo al terminar cada sesión de trabajo y comprobar en la consola de AWS que no queda nada.
 
-`db_password` no tiene valor por defecto, así que Terraform exige darle uno aunque todavía ningún recurso la use (sirve cualquier valor). Las variables de entorno solo duran mientras la ventana está abierta, así que la contraseña no queda guardada.
+`db_password` no tiene valor por defecto, así que Terraform exige darle uno. Debe tener al menos 12 caracteres y solo letras y dígitos, porque acaba en un fichero `.env` donde símbolos como `$` o `#` se leerían de otra forma. Las variables de entorno solo duran mientras la ventana está abierta, así que la contraseña no queda guardada.
 
 En el **Símbolo del sistema (cmd)** la sintaxis es `set AWS_PROFILE=verifactu`, sin comillas ni espacios alrededor del `=`.
 

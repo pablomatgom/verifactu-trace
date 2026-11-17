@@ -1042,8 +1042,9 @@ Documentación adicional del proyecto, en la carpeta [`docs/`](docs/):
 - [Capa de datos y migraciones](docs/database.md): estructura por capas de los servicios, migraciones con Alembic y tests con PostgreSQL.
 - [Integración continua](docs/ci.md): lint, tests, validación de Terraform, análisis de Dockerfiles y publicación de imágenes en GHCR.
 - [Infraestructura con Terraform](docs/terraform.md): qué es Terraform y cómo funciona, estructura de `infra/`, estado remoto en S3 con bloqueo, región de la UE y gestión de las credenciales.
-- [AWS: conceptos y comandos](docs/aws.md): S3, IAM, regiones y redes, y los comandos de la AWS CLI usados para preparar la cuenta.
-- [Decisiones del Hito 3](docs/hito3.md): elección del proveedor y de la persistencia, con sus alternativas (en curso).
+- [AWS: conceptos y comandos](docs/aws.md): S3, IAM, regiones, redes, EBS, EC2 y Systems Manager, y los comandos de la AWS CLI usados para preparar la cuenta y acceder a la instancia.
+- [Decisiones del Hito 3](docs/hito3.md): elección del proveedor y de la persistencia, con sus alternativas, y las decisiones de las capas de red, almacenamiento y cómputo (en curso).
+- [Arquitectura de despliegue](docs/despliegue.md): diagramas de lo que se despliega en AWS, de los contenedores de la instancia y del primer arranque.
 - [Decisiones del Hito 2](docs/hito2.md): justificación del gestor de tareas, la biblioteca de aserciones, el marco de pruebas y el sistema de CI, y qué lógica de negocio se prueba.
 - [Evidencias del Hito 2](docs/evidencias/README.md): salida de los comandos y capturas de la CI, GHCR y SonarCloud.
 
