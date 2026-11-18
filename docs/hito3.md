@@ -317,6 +317,14 @@ Las instancias terminadas siguen apareciendo durante aproximadamente una hora y 
 
 Con `terraform destroy` el disco se borra con los datos de PostgreSQL, así que cada sesión empieza con una base de datos vacía, y la contraseña puede ser distinta.
 
+## Versión
+
+El estado entregado del hito es la versión **`v0.3.0`**, un tag anotado sobre `main`. Al subirlo, `docker.yml` publica en GHCR las imágenes `ghcr.io/pablomatgom/verifactu-trace/<servicio>:0.3.0` (y `sha-<commit>`) de los tres servicios, igual que con la `0.2.0`.
+
+El Hito 3 añade la infraestructura (`infra/`) y su documentación, y no cambia el comportamiento de los servicios: su código solo se toca en dos comentarios. Por eso las imágenes de la `0.3.0` contienen la misma aplicación que las de la `0.2.0`.
+
+Las evidencias se tomaron con el código de `infra/` tal como está en la versión: no se ha modificado desde que se añadió la capa de cómputo, y lo posterior al experimento solo cambia la documentación. El tag fija lo entregado, y el trabajo posterior en `main` no lo modifica.
+
 ## Mejoras posibles
 
 Lo desplegado es el mínimo que cumple el enunciado: una instancia, con PostgreSQL y Redis en contenedores. Una puesta en producción cambiaría esto:
