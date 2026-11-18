@@ -42,7 +42,7 @@ CLAIM_AFTER_MILLISECONDS = 30_000
 # Wait after a failure (Redis or the database are down) before trying again.
 RETRY_SECONDS = 2
 
-# The fields of the entry this service needs (see the `invoice.issued` event in the README).
+# The fields of the entry this service needs (see the `invoice.issued` event in docs/api.md).
 REQUIRED_FIELDS = ("invoice_id", "number")
 
 
