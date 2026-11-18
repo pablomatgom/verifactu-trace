@@ -141,7 +141,8 @@ ghcr.io/pablomatgom/verifactu-trace/submission-service
 |---|---|---|
 | `sha-<commit>` | En cada push a `main` | Identifica exactamente qué código contiene la imagen y permite volver a una versión anterior |
 | `latest` | En cada push a `main` | Apunta a la última versión de la rama principal |
-| `0.2.0` | Al subir el tag `v0.2.0` | Versión estable, tal y como se etiqueta una release. Esta es la del Hito 2 |
+| `0.2.0` | Al subir el tag `v0.2.0` | Versión estable, tal y como se etiqueta una release. Es la del Hito 2 |
+| `0.3.0` | Al subir el tag `v0.3.0` | La del Hito 3. Las imágenes son las mismas que las de la `0.2.0`: el hito añade la infraestructura y no cambia el código de los servicios |
 
 Para publicar una versión estable basta con crear un tag anotado sobre `main` y subirlo:
 

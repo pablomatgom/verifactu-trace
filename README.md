@@ -5,7 +5,7 @@ Aplicación nativa de la nube para la emisión y la trazabilidad de facturación
 [![CI](https://github.com/pablomatgom/verifactu-trace/actions/workflows/ci.yml/badge.svg)](https://github.com/pablomatgom/verifactu-trace/actions/workflows/ci.yml)
 [![Docker](https://github.com/pablomatgom/verifactu-trace/actions/workflows/docker.yml/badge.svg)](https://github.com/pablomatgom/verifactu-trace/actions/workflows/docker.yml)
 
-> **Estado:** Hito 1 completado. Hito 2 (empaquetado cloud native, entorno local e integración continua) completado en la versión `v0.2.0`: los 16 casos de uso están implementados, el sistema completo se levanta con Docker Compose y el CI valida el código y publica las imágenes. Las decisiones del hito están en [`docs/hito2.md`](docs/hito2.md).
+> **Estado:** Hito 1 completado. Hito 2 (empaquetado cloud native, entorno local e integración continua) completado en la versión `v0.2.0`: los 16 casos de uso están implementados, el sistema completo se levanta con Docker Compose y el CI valida el código y publica las imágenes. Las decisiones del hito están en [`docs/hito2.md`](docs/hito2.md). Hito 3 (infraestructura como código con Terraform en AWS y verificación del patrón *Reconciler*) completado en la versión `v0.3.0`: la infraestructura se define en [`infra/`](infra/) con tres módulos (red, almacenamiento y cómputo), se crea y se destruye con Terraform, y el experimento de deriva y reconciliación está documentado más abajo, en [Infraestructura en AWS](#infraestructura-en-aws). Las decisiones del hito están en [`docs/hito3.md`](docs/hito3.md).
 
 ## Índice
 
@@ -398,6 +398,7 @@ Al mergear a `main`, o al subir un tag `v*`, `docker.yml` publica una imagen por
 | `sha-<commit>` | En cada push a `main` |
 | `latest` | En cada push a `main` |
 | `0.2.0` | Al subir el tag `v0.2.0` (la versión del Hito 2) |
+| `0.3.0` | Al subir el tag `v0.3.0` (la versión del Hito 3) |
 
 En un pull request la imagen se construye para comprobar que el Dockerfile funciona, pero **no se publica**.
 
@@ -520,7 +521,7 @@ Documentación adicional del proyecto, en la carpeta [`docs/`](docs/). Hay dos t
 | Hito | Decisiones | Evidencias |
 |---|---|---|
 | **Hito 2**: empaquetado cloud native, entorno local e integración continua | [`docs/hito2.md`](docs/hito2.md): justificación del gestor de tareas, la biblioteca de aserciones, el marco de pruebas y el sistema de CI, y qué lógica de negocio se prueba | [`docs/evidencias/hito2/`](docs/evidencias/hito2/README.md): salida de los comandos y capturas de la CI, GHCR y SonarCloud |
-| **Hito 3**: infraestructura como código en AWS | [`docs/hito3.md`](docs/hito3.md): elección del proveedor y de la persistencia, con sus alternativas, y las decisiones de las capas de red, almacenamiento y cómputo (en curso) | [`docs/evidencias/hito3/`](docs/evidencias/hito3/README.md): salida de los comandos y capturas del experimento del patrón *Reconciler* y del apagado de la infraestructura |
+| **Hito 3**: infraestructura como código en AWS | [`docs/hito3.md`](docs/hito3.md): elección del proveedor y de la persistencia, con sus alternativas, y las decisiones de las capas de red, almacenamiento y cómputo, el experimento del *Reconciler* y cómo crear y destruir la infraestructura | [`docs/evidencias/hito3/`](docs/evidencias/hito3/README.md): salida de los comandos y capturas del experimento del patrón *Reconciler* y del apagado de la infraestructura |
 
 ## Gestión del proyecto
 
