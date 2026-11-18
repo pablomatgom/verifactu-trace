@@ -1048,11 +1048,76 @@ El patrón *Reconciler* consiste en comparar de forma continua el estado deseado
 | **3. Observación** | `terraform plan` | Terraform avisa de que la regla ya no existe en AWS y propone crearla (`1 to add`) | `05-plan-deriva.txt` |
 | **4. Reconciliación** | `terraform apply` | Se crea de nuevo la regla, el puerto 8002 vuelve a responder y un nuevo `plan` no propone cambios | `06-apply-reconcilia.txt`, `07-plan-limpio.txt` |
 
-Los ficheros de evidencia están en [`docs/evidencias/hito3/`](docs/evidencias/hito3/README.md).
+Los ficheros de evidencia, con la salida completa de cada comando y las capturas de la consola, están en [`docs/evidencias/hito3/`](docs/evidencias/hito3/README.md). A continuación, los extractos de cada fase.
+
+#### 1. Estado deseado
+
+Las capturas de la consola ([antes del cambio](docs/evidencias/hito3/02-consola-antes.pdf)) muestran las tres reglas de entrada (8001, 8002 y 8003). La salida de `terraform apply`:
+
+```text
+Plan: 22 to add, 0 to change, 0 to destroy.
+...
+Apply complete! Resources: 22 added, 0 changed, 0 destroyed.
+```
+
+#### 2. Inducción de la deriva
+
+En la consola de AWS, *EC2 → Security Groups → `verifactu-trace-compute` → Edit inbound rules*, se borra la regla del puerto 8002 ([captura](docs/evidencias/hito3/03-consola-cambio.pdf): quedan dos reglas). El efecto se ve desde fuera:
+
+```text
+{"status":"ok","service":"document-service"} -> HTTP 200
+ -> HTTP 000
+{"status":"ok","service":"submission-service"} -> HTTP 200
+```
+
+#### 3. Observación: `terraform plan`
+
+Terraform actualiza el estado con lo que hay en AWS, no encuentra la regla y propone crearla:
+
+```text
+  # module.network.aws_vpc_security_group_ingress_rule.app["8002-0.0.0.0/0"] will be created
+  + resource "aws_vpc_security_group_ingress_rule" "app" {
+      + cidr_ipv4              = "0.0.0.0/0"
+      + description            = "Application port 8002"
+      + from_port              = 8002
+      + ip_protocol            = "tcp"
+      + to_port                = 8002
+      ...
+    }
+
+Plan: 1 to add, 0 to change, 0 to destroy.
+
+Warning: AWS resource not found during refresh
+```
+
+#### 4. Reconciliación: `terraform apply`
+
+```text
+module.network.aws_vpc_security_group_ingress_rule.app["8002-0.0.0.0/0"]: Creating...
+module.network.aws_vpc_security_group_ingress_rule.app["8002-0.0.0.0/0"]: Creation complete after 1s [id=sgr-0db46b4a35fd82079]
+
+Apply complete! Resources: 1 added, 0 changed, 0 destroyed.
+```
+
+El puerto 8002 vuelve a responder (`{"status":"ok","service":"traceability-service"} -> HTTP 200`) y un `terraform plan` posterior confirma que ya no hay diferencias:
+
+```text
+No changes. Your infrastructure matches the configuration.
+```
 
 #### Apagado
 
-Al terminar, `terraform destroy` elimina los 22 recursos (`08-destroy.txt`). Para comprobar que no queda nada que genere costes, se consulta a EC2 por la etiqueta `Project=verifactu-trace` (todos los recursos la llevan): la única instancia que figura está terminada y no queda ningún volumen, VPC ni grupo de seguridad. También se confirma que el rol de IAM y el parámetro de Parameter Store ya no existen (`09-sin-recursos.txt`) y se revisa la consola de AWS (`10-consola-ec2-vacia.pdf` y `10-consola-vpc-vacia.pdf`).
+Al terminar, `terraform destroy` elimina los 22 recursos ([`08-destroy.txt`](docs/evidencias/hito3/08-destroy.txt)):
+
+```text
+Plan: 0 to add, 0 to change, 22 to destroy.
+...
+Destroy complete! Resources: 22 destroyed.
+```
+
+Para comprobar que no queda nada que genere costes, se consulta a EC2 por la etiqueta `Project=verifactu-trace` (todos los recursos la llevan): la única instancia que figura está terminada y no queda ningún volumen, VPC ni grupo de seguridad. También se confirma que el rol de IAM y el parámetro de Parameter Store ya no existen ([`09-sin-recursos.txt`](docs/evidencias/hito3/09-sin-recursos.txt)) y se revisa la consola de AWS ([EC2](docs/evidencias/hito3/10-consola-ec2-vacia.pdf) y [VPC](docs/evidencias/hito3/10-consola-vpc-vacia.pdf)).
+
+El desarrollo del experimento y las observaciones están en [`docs/hito3.md`](docs/hito3.md#experimento-del-patrón-reconciler), y cómo crear y destruir la infraestructura paso a paso, en [`docs/hito3.md`](docs/hito3.md#cómo-crear-y-destruir-la-infraestructura).
 
 ## Documentación
 
